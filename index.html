@@ -467,7 +467,7 @@
             const SUPABASE_KEY =
                 "sb_publishable_2Y2sSO-7MntEpS70ee4hzg_wAuZpxJs";
 
-            const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
             let currentQuestionId = null;
             let allTags = [];
@@ -548,7 +548,7 @@
 
             // 加载标签
             async function loadTags() {
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from("tags")
                     .select("*")
                     .order("name");
@@ -597,7 +597,7 @@
                     const name = document.getElementById("tag-name").value;
                     const color = document.getElementById("tag-color").value;
 
-                    const { error } = await supabase
+                    const { error } = await supabaseClient
                         .from("tags")
                         .insert({ name, color });
 
@@ -614,7 +614,7 @@
             async function deleteTag(tagId) {
                 if (!confirm("确定删除这个标签吗？")) return;
 
-                const { error } = await supabase
+                const { error } = await supabaseClient
                     .from("tags")
                     .delete()
                     .eq("id", tagId);
@@ -755,7 +755,7 @@
                             uploadFile = new File([questionFile], "question.jpg", { type: "image/jpeg" });
                         }
                         
-                        const { error: qError } = await supabase.storage
+                        const { error: qError } = await supabaseClient.storage
                             .from("images")
                             .upload(questionPath, uploadFile);
 
@@ -765,7 +765,7 @@
                         }
                         console.log("题目图片上传成功");
 
-                        const questionUrl = supabase.storage
+                        const questionUrl = supabaseClient.storage
                             .from("images")
                             .getPublicUrl(questionPath).data.publicUrl;
 
@@ -782,7 +782,7 @@
                                 answerUploadFile = new File([answerFile], "answer.jpg", { type: "image/jpeg" });
                             }
                             
-                            const { error: aError } = await supabase.storage
+                            const { error: aError } = await supabaseClient.storage
                                 .from("images")
                                 .upload(answerPath, answerUploadFile);
 
@@ -791,7 +791,7 @@
                                 throw aError;
                             }
                             console.log("答案图片上传成功");
-                            answerUrl = supabase.storage
+                            answerUrl = supabaseClient.storage
                                 .from("images")
                                 .getPublicUrl(answerPath).data.publicUrl;
                         }
@@ -799,7 +799,7 @@
                         console.log("创建题目记录...");
                         // 创建题目记录
                         const { data: question, error: insertError } =
-                            await supabase
+                            await supabaseClient
                                 .from("questions")
                                 .insert({
                                     question_image_url: questionUrl,
@@ -821,7 +821,7 @@
                                 tag_id: tagId,
                             }));
 
-                            await supabase
+                            await supabaseClient
                                 .from("question_tags")
                                 .insert(tagRelations);
                         }
@@ -865,14 +865,17 @@
                         // 恢复按钮
                         submitBtn.disabled = false;
                         submitBtn.textContent = originalText;
-                        alert("添加失败: " + error.message);
-                        showStatus("添加失败: " + error.message, "error");
+                        let msg = "添加失败: " + (error.message || error);
+                        if (error.message && error.message.includes("row-level security")) {
+                            msg = "上传失败：Storage bucket 的 RLS 策略未配置。请在 Supabase Dashboard → Storage → images bucket → Policies 中添加允许匿名上传的策略。";
+                        }
+                        showStatus(msg, "error");
                     }
                 });
 
             // 加载题目
             async function loadQuestions() {
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from("questions")
                     .select(
                         `
@@ -949,7 +952,7 @@
                 if (!currentQuestionId || !confirm("确定删除这道题目吗？"))
                     return;
 
-                const { error } = await supabase
+                const { error } = await supabaseClient
                     .from("questions")
                     .delete()
                     .eq("id", currentQuestionId);
@@ -983,7 +986,7 @@
                     try {
                         // 创建试卷
                         const { data: paper, error: paperError } =
-                            await supabase
+                            await supabaseClient
                                 .from("papers")
                                 .insert({ name })
                                 .select()
@@ -994,7 +997,7 @@
                         // 获取包含选定标签的题目
                         if (selectedTags.length > 0) {
                             const { data: questionTags, error: qtError } =
-                                await supabase
+                                await supabaseClient
                                     .from("question_tags")
                                     .select("question_id")
                                     .in("tag_id", selectedTags);
@@ -1018,7 +1021,7 @@
                             );
 
                             if (paperQuestions.length > 0) {
-                                await supabase
+                                await supabaseClient
                                     .from("paper_questions")
                                     .insert(paperQuestions);
                             }
@@ -1034,7 +1037,7 @@
 
             // 加载试卷
             async function loadPapers() {
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from("papers")
                     .select(
                         `
@@ -1073,7 +1076,7 @@
             async function deletePaper(paperId) {
                 if (!confirm("确定删除这份试卷吗？")) return;
 
-                const { error } = await supabase
+                const { error } = await supabaseClient
                     .from("papers")
                     .delete()
                     .eq("id", paperId);
@@ -1086,19 +1089,16 @@
             // 显示状态消息
             function showStatus(message, type) {
                 const container = document.getElementById("status-message");
-                container.innerHTML = `<div class="status ${type}">${message}</div>`;
+                const closeBtn = type === "error" ? ' <span style="cursor:pointer;float:right;font-weight:bold" onclick="this.parentElement.parentElement.innerHTML=\'\'">&times;</span>' : '';
+                container.innerHTML = `<div class="status ${type}">${message}${closeBtn}</div>`;
                 container.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 
                 if (type === 'success') {
-                    // 成功消息显示更久
                     setTimeout(() => {
                         container.innerHTML = "";
                     }, 5000);
-                } else {
-                    setTimeout(() => {
-                        container.innerHTML = "";
-                    }, 3000);
                 }
+                // error 消息不自动消失
             }
         </script>
     </body>
