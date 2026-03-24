@@ -251,8 +251,15 @@
                 max-height: 200px;
                 object-fit: contain;
                 margin-top: 10px;
-                border: 1px solid #ddd;
+                border: 2px solid #10b981;
                 border-radius: 5px;
+                background: #f0fdf4;
+            }
+
+            .preview-label {
+                color: #10b981;
+                font-size: 12px;
+                margin-top: 5px;
             }
 
             .status {
@@ -315,6 +322,7 @@
                                 id="question-preview"
                                 class="preview-image hidden"
                             />
+                            <div id="question-preview-label" class="preview-label hidden">✓ 题目图片已选择</div>
                         </div>
                         <div class="form-group">
                             <label>答案图片（可选）</label>
@@ -335,6 +343,7 @@
                                 id="answer-preview"
                                 class="preview-image hidden"
                             />
+                            <div id="answer-preview-label" class="preview-label hidden">✓ 答案图片已选择</div>
                         </div>
                         <div class="form-group">
                             <label>选择标签</label>
@@ -694,10 +703,15 @@
                 canvas.toBlob((blob) => {
                     const previewId = currentCropTarget === "question" ? "question-preview" : "answer-preview";
                     const preview = document.getElementById(previewId);
+                    const labelId = currentCropTarget === "question" ? "question-preview-label" : "answer-preview-label";
+                    const label = document.getElementById(labelId);
                     
                     // 显示预览
                     preview.src = canvas.toDataURL();
                     preview.classList.remove("hidden");
+                    if (label) {
+                        label.classList.remove("hidden");
+                    }
                     
                     // 保存裁剪后的图片
                     croppedImages[currentCropTarget] = blob;
@@ -739,6 +753,13 @@
                         showStatus("请先拍照或选择题目图片并裁剪", "error");
                         return;
                     }
+
+                    // 显示上传中状态
+                    const submitBtn = e.target.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.textContent;
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = "上传中...";
+                    showStatus("正在上传题目...", "success");
 
                     try {
                         // 上传题目图片
@@ -800,11 +821,35 @@
                         document
                             .getElementById("answer-preview")
                             .classList.add("hidden");
+                        document
+                            .getElementById("question-preview-label")
+                            .classList.add("hidden");
+                        document
+                            .getElementById("answer-preview-label")
+                            .classList.add("hidden");
                         croppedImages = { question: null, answer: null };
 
-                        loadQuestions();
-                        showStatus("题目添加成功", "success");
+                        // 恢复按钮
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+
+                        // 刷新题目列表
+                        await loadQuestions();
+                        
+                        // 显示成功消息
+                        showStatus("✓ 题目添加成功！已更新到列表", "success");
+                        
+                        // 滚动到题目列表
+                        setTimeout(() => {
+                            document.getElementById("questions-list").scrollIntoView({ 
+                                behavior: 'smooth', 
+                                block: 'start' 
+                            });
+                        }, 500);
                     } catch (error) {
+                        // 恢复按钮
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
                         showStatus("添加失败: " + error.message, "error");
                     }
                 });
@@ -1026,9 +1071,18 @@
             function showStatus(message, type) {
                 const container = document.getElementById("status-message");
                 container.innerHTML = `<div class="status ${type}">${message}</div>`;
-                setTimeout(() => {
-                    container.innerHTML = "";
-                }, 3000);
+                container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                if (type === 'success') {
+                    // 成功消息显示更久
+                    setTimeout(() => {
+                        container.innerHTML = "";
+                    }, 5000);
+                } else {
+                    setTimeout(() => {
+                        container.innerHTML = "";
+                    }, 3000);
+                }
             }
         </script>
     </body>
