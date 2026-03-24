@@ -240,12 +240,34 @@
             #crop-image {
                 display: block;
                 max-width: 100%;
-                max-height: 100%;
             }
 
             .cropper-container {
                 width: 100% !important;
                 height: 100% !important;
+            }
+
+            /* 裁剪拖拽手柄加大，方便手机操作 */
+            .cropper-point {
+                width: 20px !important;
+                height: 20px !important;
+                background-color: rgba(255,255,255,0.9) !important;
+                border: 2px solid #3b82f6 !important;
+                border-radius: 50% !important;
+                opacity: 1 !important;
+            }
+            .cropper-line {
+                background-color: rgba(59,130,246,0.7) !important;
+            }
+            .cropper-face {
+                background-color: transparent !important;
+                border: 2px dashed rgba(255,255,255,0.8) !important;
+            }
+            .cropper-dashed {
+                border-color: rgba(255,255,255,0.4) !important;
+            }
+            .cropper-view-box {
+                outline: none !important;
             }
 
             .preview-image {
@@ -544,23 +566,23 @@
 
         <!-- 图片裁剪弹窗 -->
         <div id="crop-modal" class="modal">
-            <div class="modal-content" style="max-width:98%;width:100%;max-height:96vh;height:96vh;padding:12px;display:flex;flex-direction:column;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                    <h2 style="margin:0;font-size:18px;">裁剪图片</h2>
-                    <span style="cursor:pointer;font-size:24px;" onclick="cancelCrop()">×</span>
+            <div class="modal-content" style="max-width:100%;width:100%;max-height:100vh;height:100vh;padding:0;display:flex;flex-direction:column;background:#000;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;flex-shrink:0;">
+                    <h2 style="margin:0;font-size:16px;color:#fff;">裁剪图片</h2>
+                    <span style="cursor:pointer;font-size:28px;color:#fff;" onclick="cancelCrop()">×</span>
                 </div>
-                <div id="crop-container" style="flex:1;background:#f0f0f0;min-height:0;position:relative;overflow:hidden;margin-bottom:8px;">
-                    <img id="crop-image" style="max-width:100%;max-height:100%;display:block;" />
+                <div id="crop-container" style="flex:1;background:#000;min-height:0;position:relative;overflow:hidden;">
+                    <img id="crop-image" style="display:block;" />
                 </div>
-                <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-                    <button onclick="rotateCrop(-5)" title="左转5°" style="padding:8px 12px;font-size:16px;">↺ 5°</button>
-                    <button onclick="rotateCrop(-1)" title="左转1°" style="padding:8px 12px;font-size:16px;">← 1°</button>
-                    <button onclick="rotateCrop(1)" title="右转1°" style="padding:8px 12px;font-size:16px;">1° →</button>
-                    <button onclick="rotateCrop(5)" title="右转5°" style="padding:8px 12px;font-size:16px;">5° ↻</button>
+                <div style="display:flex;gap:8px;justify-content:center;padding:6px 12px 4px;flex-shrink:0;">
+                    <button onclick="rotateCrop(-5)" title="左转5°" style="padding:10px 16px;font-size:16px;border-radius:20px;">↺ 5°</button>
+                    <button onclick="rotateCrop(-1)" title="左转1°" style="padding:10px 16px;font-size:16px;border-radius:20px;">← 1°</button>
+                    <button onclick="rotateCrop(1)" title="右转1°" style="padding:10px 16px;font-size:16px;border-radius:20px;">1° →</button>
+                    <button onclick="rotateCrop(5)" title="右转5°" style="padding:10px 16px;font-size:16px;border-radius:20px;">5° ↻</button>
                 </div>
-                <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;">
-                    <button onclick="confirmCrop()" style="flex:1;max-width:200px;">确认裁剪</button>
-                    <button class="secondary" onclick="cancelCrop()" style="flex:1;max-width:200px;">取消</button>
+                <div style="display:flex;gap:10px;justify-content:center;padding:6px 12px 12px;flex-shrink:0;">
+                    <button onclick="confirmCrop()" style="flex:1;max-width:200px;padding:12px;font-size:16px;border-radius:8px;">确认裁剪</button>
+                    <button class="secondary" onclick="cancelCrop()" style="flex:1;max-width:200px;padding:12px;font-size:16px;border-radius:8px;">取消</button>
                 </div>
             </div>
         </div>
@@ -625,11 +647,14 @@
                     setTimeout(() => {
                         try {
                             cropper = new Cropper(cropImage, {
-                                viewMode: 1,
+                                viewMode: 3,
                                 dragMode: "move",
-                                autoCropArea: 0.8,
+                                autoCropArea: 0.9,
                                 cropBoxMovable: true,
                                 cropBoxResizable: true,
+                                toggleDragModeOnDblclick: false,
+                                background: false,
+                                modal: true,
                             });
                         } catch (err) {
                             console.error("裁剪器初始化失败:", err);
