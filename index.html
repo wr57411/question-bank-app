@@ -256,6 +256,32 @@
                 background: #f0fdf4;
             }
 
+            .preview-wrap {
+                position: relative;
+                display: inline-block;
+                max-width: 100%;
+            }
+            .preview-delete {
+                position: absolute;
+                top: -8px;
+                right: -8px;
+                width: 24px;
+                height: 24px;
+                background: #ef4444;
+                color: #fff;
+                border: 2px solid #fff;
+                border-radius: 50%;
+                font-size: 14px;
+                line-height: 20px;
+                text-align: center;
+                cursor: pointer;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+                z-index: 10;
+            }
+            .preview-delete:hover {
+                background: #dc2626;
+            }
+
             .preview-label {
                 color: #10b981;
                 font-size: 12px;
@@ -399,10 +425,10 @@
                                 accept="image/*"
                                 required
                             />
-                            <img
-                                id="question-preview"
-                                class="preview-image hidden"
-                            />
+                            <div class="preview-wrap" id="question-preview-wrap" style="display:none">
+                                <span class="preview-delete" onclick="removeImage('question')">×</span>
+                                <img id="question-preview" class="preview-image" />
+                            </div>
                             <div id="question-preview-label" class="preview-label hidden">✓ 题目图片已选择 <span class="crop-icon" onclick="startCrop('question')" title="裁剪图片">✂️</span></div>
                         </div>
                         <div class="form-group">
@@ -420,10 +446,10 @@
                                 id="answer-image"
                                 accept="image/*"
                             />
-                            <img
-                                id="answer-preview"
-                                class="preview-image hidden"
-                            />
+                            <div class="preview-wrap" id="answer-preview-wrap" style="display:none">
+                                <span class="preview-delete" onclick="removeImage('answer')">×</span>
+                                <img id="answer-preview" class="preview-image" />
+                            </div>
                             <div id="answer-preview-label" class="preview-label hidden">✓ 答案图片已选择 <span class="crop-icon" onclick="startCrop('answer')" title="裁剪图片">✂️</span></div>
                         </div>
                         <div class="form-group">
@@ -516,14 +542,23 @@
 
         <!-- 图片裁剪弹窗 -->
         <div id="crop-modal" class="modal">
-            <div class="modal-content" style="max-width: 95%; width: 400px; max-height: 90vh;">
-                <h2 style="margin-bottom: 15px;">裁剪图片</h2>
-                <div style="height: 350px; background: #f0f0f0; margin-bottom: 15px;">
-                    <img id="crop-image" style="max-width: 100%; display: block;" />
+            <div class="modal-content" style="max-width:98%;width:100%;max-height:96vh;height:96vh;padding:12px;display:flex;flex-direction:column;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <h2 style="margin:0;font-size:18px;">裁剪图片</h2>
+                    <span style="cursor:pointer;font-size:24px;" onclick="cancelCrop()">×</span>
                 </div>
-                <div style="display: flex; gap: 10px; justify-content: center;">
-                    <button onclick="confirmCrop()">确认裁剪</button>
-                    <button class="secondary" onclick="cancelCrop()">取消</button>
+                <div style="flex:1;background:#f0f0f0;min-height:0;overflow:hidden;margin-bottom:8px;">
+                    <img id="crop-image" style="max-width:100%;display:block;" />
+                </div>
+                <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+                    <button onclick="rotateCrop(-5)" title="左转5°" style="padding:8px 12px;font-size:16px;">↺ 5°</button>
+                    <button onclick="rotateCrop(-1)" title="左转1°" style="padding:8px 12px;font-size:16px;">← 1°</button>
+                    <button onclick="rotateCrop(1)" title="右转1°" style="padding:8px 12px;font-size:16px;">1° →</button>
+                    <button onclick="rotateCrop(5)" title="右转5°" style="padding:8px 12px;font-size:16px;">5° ↻</button>
+                </div>
+                <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;">
+                    <button onclick="confirmCrop()" style="flex:1;max-width:200px;">确认裁剪</button>
+                    <button class="secondary" onclick="cancelCrop()" style="flex:1;max-width:200px;">取消</button>
                 </div>
             </div>
         </div>
@@ -765,7 +800,7 @@
                             // 直接显示预览
                             const preview = document.getElementById("question-preview");
                             preview.src = ev.target.result;
-                            preview.classList.remove("hidden");
+                            document.getElementById("question-preview-wrap").style.display = "inline-block";
                             document.getElementById("question-preview-label").classList.remove("hidden");
                             
                             // 保存图片数据
@@ -784,7 +819,7 @@
                         reader.onload = (ev) => {
                             const preview = document.getElementById("answer-preview");
                             preview.src = ev.target.result;
-                            preview.classList.remove("hidden");
+                            document.getElementById("answer-preview-wrap").style.display = "inline-block";
                             document.getElementById("answer-preview-label").classList.remove("hidden");
                             
                             croppedImages.answer = e.target.files[0];
@@ -806,12 +841,13 @@
                 canvas.toBlob((blob) => {
                     const previewId = currentCropTarget === "question" ? "question-preview" : "answer-preview";
                     const preview = document.getElementById(previewId);
-                    const labelId = currentCropTarget === "question" ? "question-preview-label" : "answer-preview-label";
+                    const wrapId = currentCropTarget + "-preview-wrap";
+                    const labelId = currentCropTarget + "-preview-label";
                     const label = document.getElementById(labelId);
                     
                     // 显示预览
                     preview.src = canvas.toDataURL();
-                    preview.classList.remove("hidden");
+                    document.getElementById(wrapId).style.display = "inline-block";
                     if (label) {
                         label.classList.remove("hidden");
                     }
@@ -832,6 +868,23 @@
                     cropper.destroy();
                     cropper = null;
                 }
+            }
+
+            function rotateCrop(deg) {
+                if (cropper) cropper.rotate(deg);
+            }
+
+            function removeImage(target) {
+                croppedImages[target] = null;
+                originalImages[target] = null;
+                const wrap = document.getElementById(target + "-preview-wrap");
+                const preview = document.getElementById(target + "-preview");
+                const label = document.getElementById(target + "-preview-label");
+                preview.src = "";
+                wrap.style.display = "none";
+                if (label) label.classList.add("hidden");
+                const fileInput = document.getElementById(target === "question" ? "question-image" : "answer-image");
+                fileInput.value = "";
             }
 
             // 添加题目
@@ -921,23 +974,12 @@
 
                         // 重置表单
                         document.getElementById("question-form").reset();
-                        document
-                            .getElementById("question-preview")
-                            .classList.add("hidden");
-                        document
-                            .getElementById("answer-preview")
-                            .classList.add("hidden");
-                        document
-                            .getElementById("question-preview-label")
-                            .classList.add("hidden");
-                        document
-                            .getElementById("answer-preview-label")
-                            .classList.add("hidden");
+                        document.getElementById("question-preview-wrap").style.display = "none";
+                        document.getElementById("answer-preview-wrap").style.display = "none";
+                        document.getElementById("question-preview-label").classList.add("hidden");
+                        document.getElementById("answer-preview-label").classList.add("hidden");
                         // 清除标签选中状态
                         document.querySelectorAll("#tag-select .tag-block.selected").forEach(el => toggleTagBlock(el));
-                        document
-                            .getElementById("answer-preview-label")
-                            .classList.add("hidden");
                         croppedImages = { question: null, answer: null };
 
                         // 恢复按钮
