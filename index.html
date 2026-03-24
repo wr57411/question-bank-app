@@ -262,6 +262,17 @@
                 margin-top: 5px;
             }
 
+            .crop-icon {
+                cursor: pointer;
+                margin-left: 6px;
+                font-size: 16px;
+                display: inline-block;
+                transition: transform 0.2s;
+            }
+            .crop-icon:hover {
+                transform: scale(1.3);
+            }
+
             .status {
                 padding: 10px;
                 border-radius: 5px;
@@ -305,7 +316,7 @@
                         <div class="form-group">
                             <label>题目图片 *</label>
                             <div class="upload-buttons">
-                                <button type="button" class="upload-btn camera" onclick="document.getElementById('question-image').click(); document.getElementById('question-image').setAttribute('capture', 'environment');">
+                                <button type="button" class="upload-btn camera" onclick="document.getElementById('question-image').setAttribute('capture', 'environment'); document.getElementById('question-image').click();">
                                     📷 拍照
                                 </button>
                                 <button type="button" class="upload-btn" onclick="document.getElementById('question-image').removeAttribute('capture'); document.getElementById('question-image').click();">
@@ -322,12 +333,12 @@
                                 id="question-preview"
                                 class="preview-image hidden"
                             />
-                            <div id="question-preview-label" class="preview-label hidden">✓ 题目图片已选择</div>
+                            <div id="question-preview-label" class="preview-label hidden">✓ 题目图片已选择 <span class="crop-icon" onclick="startCrop('question')" title="裁剪图片">✂️</span></div>
                         </div>
                         <div class="form-group">
                             <label>答案图片（可选）</label>
                             <div class="upload-buttons">
-                                <button type="button" class="upload-btn camera" onclick="document.getElementById('answer-image').click(); document.getElementById('answer-image').setAttribute('capture', 'environment');">
+                                <button type="button" class="upload-btn camera" onclick="document.getElementById('answer-image').setAttribute('capture', 'environment'); document.getElementById('answer-image').click();">
                                     📷 拍照
                                 </button>
                                 <button type="button" class="upload-btn" onclick="document.getElementById('answer-image').removeAttribute('capture'); document.getElementById('answer-image').click();">
@@ -343,7 +354,7 @@
                                 id="answer-preview"
                                 class="preview-image hidden"
                             />
-                            <div id="answer-preview-label" class="preview-label hidden">✓ 答案图片已选择</div>
+                            <div id="answer-preview-label" class="preview-label hidden">✓ 答案图片已选择 <span class="crop-icon" onclick="startCrop('answer')" title="裁剪图片">✂️</span></div>
                         </div>
                         <div class="form-group">
                             <label>选择标签</label>
@@ -475,19 +486,17 @@
             let cropper = null;
             let currentCropTarget = null;
             let croppedImages = { question: null, answer: null };
+            let originalImages = { question: null, answer: null }; // 保存原始图片 dataURL
 
-            // 检查是否有待裁剪的图片
-            function checkPendingCrop() {
-                const pendingImage = sessionStorage.getItem('pendingCropImage');
-                const pendingTarget = sessionStorage.getItem('pendingCropTarget');
-                
-                if (pendingImage && pendingTarget) {
-                    sessionStorage.removeItem('pendingCropImage');
-                    sessionStorage.removeItem('pendingCropTarget');
-                    
-                    currentCropTarget = pendingTarget;
-                    openCropperFromDataUrl(pendingImage);
+            // 点击裁剪图标时调用
+            function startCrop(target) {
+                const dataUrl = originalImages[target];
+                if (!dataUrl) {
+                    showStatus("请先选择图片", "error");
+                    return;
                 }
+                currentCropTarget = target;
+                openCropperFromDataUrl(dataUrl);
             }
 
             function openCropperFromDataUrl(dataUrl) {
@@ -528,7 +537,6 @@
                 loadTags();
                 loadQuestions();
                 loadPapers();
-                checkPendingCrop();
             });
 
             // Tab 切换
@@ -639,10 +647,7 @@
                             
                             // 保存图片数据
                             croppedImages.question = e.target.files[0];
-                            
-                            // 同时保存到 sessionStorage 以防需要裁剪
-                            sessionStorage.setItem('pendingCropImage', ev.target.result);
-                            sessionStorage.setItem('pendingCropTarget', 'question');
+                            originalImages.question = ev.target.result;
                         };
                         reader.readAsDataURL(e.target.files[0]);
                     }
@@ -660,9 +665,7 @@
                             document.getElementById("answer-preview-label").classList.remove("hidden");
                             
                             croppedImages.answer = e.target.files[0];
-                            
-                            sessionStorage.setItem('pendingCropImage', ev.target.result);
-                            sessionStorage.setItem('pendingCropTarget', 'answer');
+                            originalImages.answer = ev.target.result;
                         };
                         reader.readAsDataURL(e.target.files[0]);
                     }
@@ -706,12 +709,6 @@
                     cropper.destroy();
                     cropper = null;
                 }
-                // 清空文件输入
-                if (currentCropTarget === "question") {
-                    document.getElementById("question-image").value = "";
-                } else {
-                    document.getElementById("answer-image").value = "";
-                }
             }
 
             // 添加题目
@@ -726,11 +723,8 @@
                         document.getElementById("tag-select").selectedOptions,
                     ).map((o) => o.value);
 
-                    console.log("questionFile:", questionFile);
-                    console.log("answerFile:", answerFile);
-
                     if (!questionFile) {
-                        alert("请先选择题目图片");
+                        showStatus("请先选择题目图片", "error");
                         return;
                     }
 
@@ -739,19 +733,13 @@
                     const originalText = submitBtn.textContent;
                     submitBtn.disabled = true;
                     submitBtn.textContent = "上传中...";
-                    alert("开始上传...");
 
                     try {
-                        console.log("开始上传题目图片...");
                         // 上传题目图片
                         const questionPath = `questions/${Date.now()}_question.jpg`;
                         
-                        // 确保文件是正确的格式
                         let uploadFile = questionFile;
-                        if (questionFile instanceof File) {
-                            uploadFile = questionFile;
-                        } else {
-                            // 如果是 Blob，转换为 File
+                        if (!(questionFile instanceof File)) {
                             uploadFile = new File([questionFile], "question.jpg", { type: "image/jpeg" });
                         }
                         
@@ -759,11 +747,7 @@
                             .from("images")
                             .upload(questionPath, uploadFile);
 
-                        if (qError) {
-                            console.error("题目图片上传失败:", qError);
-                            throw qError;
-                        }
-                        console.log("题目图片上传成功");
+                        if (qError) throw qError;
 
                         const questionUrl = supabaseClient.storage
                             .from("images")
@@ -772,13 +756,10 @@
                         // 上传答案图片（如果有）
                         let answerUrl = null;
                         if (answerFile) {
-                            console.log("开始上传答案图片...");
                             const answerPath = `answers/${Date.now()}_answer.jpg`;
                             
                             let answerUploadFile = answerFile;
-                            if (answerFile instanceof File) {
-                                answerUploadFile = answerFile;
-                            } else {
+                            if (!(answerFile instanceof File)) {
                                 answerUploadFile = new File([answerFile], "answer.jpg", { type: "image/jpeg" });
                             }
                             
@@ -786,17 +767,12 @@
                                 .from("images")
                                 .upload(answerPath, answerUploadFile);
 
-                            if (aError) {
-                                console.error("答案图片上传失败:", aError);
-                                throw aError;
-                            }
-                            console.log("答案图片上传成功");
+                            if (aError) throw aError;
                             answerUrl = supabaseClient.storage
                                 .from("images")
                                 .getPublicUrl(answerPath).data.publicUrl;
                         }
 
-                        console.log("创建题目记录...");
                         // 创建题目记录
                         const { data: question, error: insertError } =
                             await supabaseClient
@@ -808,11 +784,7 @@
                                 .select()
                                 .single();
 
-                        if (insertError) {
-                            console.error("创建题目记录失败:", insertError);
-                            throw insertError;
-                        }
-                        console.log("题目记录创建成功:", question);
+                        if (insertError) throw insertError;
 
                         // 关联标签
                         if (selectedTags.length > 0) {
@@ -849,8 +821,6 @@
                         // 刷新题目列表
                         await loadQuestions();
                         
-                        // 显示成功消息
-                        alert("✓ 题目添加成功！已更新到列表");
                         showStatus("✓ 题目添加成功！已更新到列表", "success");
                         
                         // 滚动到题目列表
@@ -861,7 +831,6 @@
                             });
                         }, 500);
                     } catch (error) {
-                        console.error("上传失败:", error);
                         // 恢复按钮
                         submitBtn.disabled = false;
                         submitBtn.textContent = originalText;
