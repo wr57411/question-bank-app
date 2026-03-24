@@ -631,13 +631,18 @@
                     if (e.target.files && e.target.files[0]) {
                         const reader = new FileReader();
                         reader.onload = (ev) => {
-                            // 压缩图片并保存到 sessionStorage
-                            compressImage(ev.target.result, (compressed) => {
-                                sessionStorage.setItem('pendingCropImage', compressed);
-                                sessionStorage.setItem('pendingCropTarget', 'question');
-                                // 刷新页面以恢复状态
-                                window.location.reload();
-                            });
+                            // 直接显示预览
+                            const preview = document.getElementById("question-preview");
+                            preview.src = ev.target.result;
+                            preview.classList.remove("hidden");
+                            document.getElementById("question-preview-label").classList.remove("hidden");
+                            
+                            // 保存图片数据
+                            croppedImages.question = e.target.files[0];
+                            
+                            // 同时保存到 sessionStorage 以防需要裁剪
+                            sessionStorage.setItem('pendingCropImage', ev.target.result);
+                            sessionStorage.setItem('pendingCropTarget', 'question');
                         };
                         reader.readAsDataURL(e.target.files[0]);
                     }
@@ -649,47 +654,19 @@
                     if (e.target.files && e.target.files[0]) {
                         const reader = new FileReader();
                         reader.onload = (ev) => {
-                            compressImage(ev.target.result, (compressed) => {
-                                sessionStorage.setItem('pendingCropImage', compressed);
-                                sessionStorage.setItem('pendingCropTarget', 'answer');
-                                window.location.reload();
-                            });
+                            const preview = document.getElementById("answer-preview");
+                            preview.src = ev.target.result;
+                            preview.classList.remove("hidden");
+                            document.getElementById("answer-preview-label").classList.remove("hidden");
+                            
+                            croppedImages.answer = e.target.files[0];
+                            
+                            sessionStorage.setItem('pendingCropImage', ev.target.result);
+                            sessionStorage.setItem('pendingCropTarget', 'answer');
                         };
                         reader.readAsDataURL(e.target.files[0]);
                     }
                 });
-
-            // 压缩图片
-            function compressImage(dataUrl, callback, maxWidth = 1200) {
-                const img = new Image();
-                img.onload = function() {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    
-                    if (width > maxWidth) {
-                        height = Math.round(height * maxWidth / width);
-                        width = maxWidth;
-                    }
-                    
-                    canvas.width = width;
-                    canvas.height = height;
-                    
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    callback(canvas.toDataURL('image/jpeg', 0.8));
-                };
-                img.src = dataUrl;
-            }
-
-            function openCropper(file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    openCropperFromDataUrl(e.target.result);
-                };
-                reader.readAsDataURL(file);
-            }
 
             function confirmCrop() {
                 if (!cropper) return;
@@ -749,8 +726,11 @@
                         document.getElementById("tag-select").selectedOptions,
                     ).map((o) => o.value);
 
+                    console.log("questionFile:", questionFile);
+                    console.log("answerFile:", answerFile);
+
                     if (!questionFile) {
-                        showStatus("请先拍照或选择题目图片并裁剪", "error");
+                        alert("请先选择题目图片");
                         return;
                     }
 
@@ -759,16 +739,31 @@
                     const originalText = submitBtn.textContent;
                     submitBtn.disabled = true;
                     submitBtn.textContent = "上传中...";
-                    showStatus("正在上传题目...", "success");
+                    alert("开始上传...");
 
                     try {
+                        console.log("开始上传题目图片...");
                         // 上传题目图片
                         const questionPath = `questions/${Date.now()}_question.jpg`;
+                        
+                        // 确保文件是正确的格式
+                        let uploadFile = questionFile;
+                        if (questionFile instanceof File) {
+                            uploadFile = questionFile;
+                        } else {
+                            // 如果是 Blob，转换为 File
+                            uploadFile = new File([questionFile], "question.jpg", { type: "image/jpeg" });
+                        }
+                        
                         const { error: qError } = await supabase.storage
                             .from("images")
-                            .upload(questionPath, questionFile);
+                            .upload(questionPath, uploadFile);
 
-                        if (qError) throw qError;
+                        if (qError) {
+                            console.error("题目图片上传失败:", qError);
+                            throw qError;
+                        }
+                        console.log("题目图片上传成功");
 
                         const questionUrl = supabase.storage
                             .from("images")
@@ -777,17 +772,31 @@
                         // 上传答案图片（如果有）
                         let answerUrl = null;
                         if (answerFile) {
+                            console.log("开始上传答案图片...");
                             const answerPath = `answers/${Date.now()}_answer.jpg`;
+                            
+                            let answerUploadFile = answerFile;
+                            if (answerFile instanceof File) {
+                                answerUploadFile = answerFile;
+                            } else {
+                                answerUploadFile = new File([answerFile], "answer.jpg", { type: "image/jpeg" });
+                            }
+                            
                             const { error: aError } = await supabase.storage
                                 .from("images")
-                                .upload(answerPath, answerFile);
+                                .upload(answerPath, answerUploadFile);
 
-                            if (aError) throw aError;
+                            if (aError) {
+                                console.error("答案图片上传失败:", aError);
+                                throw aError;
+                            }
+                            console.log("答案图片上传成功");
                             answerUrl = supabase.storage
                                 .from("images")
                                 .getPublicUrl(answerPath).data.publicUrl;
                         }
 
+                        console.log("创建题目记录...");
                         // 创建题目记录
                         const { data: question, error: insertError } =
                             await supabase
@@ -799,7 +808,11 @@
                                 .select()
                                 .single();
 
-                        if (insertError) throw insertError;
+                        if (insertError) {
+                            console.error("创建题目记录失败:", insertError);
+                            throw insertError;
+                        }
+                        console.log("题目记录创建成功:", question);
 
                         // 关联标签
                         if (selectedTags.length > 0) {
@@ -837,6 +850,7 @@
                         await loadQuestions();
                         
                         // 显示成功消息
+                        alert("✓ 题目添加成功！已更新到列表");
                         showStatus("✓ 题目添加成功！已更新到列表", "success");
                         
                         // 滚动到题目列表
@@ -847,9 +861,11 @@
                             });
                         }, 500);
                     } catch (error) {
+                        console.error("上传失败:", error);
                         // 恢复按钮
                         submitBtn.disabled = false;
                         submitBtn.textContent = originalText;
+                        alert("添加失败: " + error.message);
                         showStatus("添加失败: " + error.message, "error");
                     }
                 });
