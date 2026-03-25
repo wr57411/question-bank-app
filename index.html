@@ -627,12 +627,12 @@
 
         <!-- 图片裁剪弹窗 -->
         <div id="crop-modal" class="modal">
-            <div class="modal-content" style="max-width:100%;width:100%;max-height:100vh;height:100vh;padding:0;display:flex;flex-direction:column;background:#000;">
+            <div class="modal-content" style="max-width:100%;width:100%;max-height:100dvh;height:100dvh;height:100svh;padding:0;display:flex;flex-direction:column;background:#000;">
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;flex-shrink:0;">
                     <h2 style="margin:0;font-size:16px;color:#fff;">裁剪图片</h2>
                     <span style="cursor:pointer;font-size:28px;color:#fff;" onclick="cancelCrop()">×</span>
                 </div>
-                <div id="crop-container" style="flex:1;background:#000;min-height:0;position:relative;overflow:hidden;">
+                <div id="crop-container" style="flex:1 1 0;background:#000;min-height:0;position:relative;overflow:hidden;">
                     <img id="crop-image" style="display:block;" />
                 </div>
                 <div style="display:flex;gap:8px;justify-content:center;padding:6px 12px 4px;flex-shrink:0;">
@@ -641,9 +641,9 @@
                     <button onclick="rotateCrop(1)" title="右转1°" style="padding:10px 16px;font-size:16px;border-radius:20px;">1° →</button>
                     <button onclick="rotateCrop(5)" title="右转5°" style="padding:10px 16px;font-size:16px;border-radius:20px;">5° ↻</button>
                 </div>
-                <div style="display:flex;gap:10px;justify-content:center;padding:6px 12px 12px;flex-shrink:0;">
-                    <button onclick="confirmCrop()" style="flex:1;max-width:200px;padding:12px;font-size:16px;border-radius:8px;">确认裁剪</button>
-                    <button class="secondary" onclick="cancelCrop()" style="flex:1;max-width:200px;padding:12px;font-size:16px;border-radius:8px;">取消</button>
+                <div style="display:flex;gap:10px;justify-content:center;padding:8px 12px max(12px, env(safe-area-inset-bottom));flex-shrink:0;">
+                    <button onclick="confirmCrop()" style="flex:1;max-width:200px;padding:14px;font-size:16px;border-radius:8px;">确认裁剪</button>
+                    <button class="secondary" onclick="cancelCrop()" style="flex:1;max-width:200px;padding:14px;font-size:16px;border-radius:8px;">取消</button>
                 </div>
             </div>
         </div>
