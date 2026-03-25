@@ -1585,10 +1585,9 @@
                     }
                 }
 
-                function addImage(doc, dataUrl, yStart, label) {
+                function addImage(doc, dataUrl, yStart, label, maxH) {
                     return new Promise((resolve) => {
                         if (!dataUrl || dataUrl.length < 50) {
-                            console.warn("addImage: dataURL无效", label);
                             resolve(yStart + 10);
                             return;
                         }
@@ -1597,8 +1596,8 @@
                         const finish = (fn) => { if (!done) { done = true; fn(); } };
                         img.onload = function() {
                             finish(() => {
-                                console.log("addImage ok:", label, img.width + "x" + img.height);
-                                const ratio = Math.min(maxW / img.width, (pageH - margin * 2 - yStart) / img.height, 1);
+                                const availH = maxH || (pageH - margin * 2 - yStart);
+                                const ratio = Math.min(maxW / img.width, availH / img.height, 1);
                                 const w = img.width * ratio;
                                 const h = img.height * ratio;
                                 if (yStart + h > pageH - margin) { doc.addPage(); yStart = margin; }
@@ -1608,10 +1607,10 @@
                             });
                         };
                         img.onerror = function() {
-                            finish(() => { console.warn("addImage error:", label); resolve(yStart + 10); });
+                            finish(() => { resolve(yStart + 10); });
                         };
                         setTimeout(() => {
-                            finish(() => { console.warn("addImage timeout:", label); resolve(yStart + 10); });
+                            finish(() => { resolve(yStart + 10); });
                         }, 5000);
                         img.src = dataUrl;
                     });
@@ -1747,25 +1746,32 @@
                             y = addSpacing(doc, y, x + colW, x) + 2;
                         }
                     } else {
-                        // 单栏模式（原逻辑）
+                        // 单栏模式（每题一页，合理分配空间）
                         for (let i = 0; i < toExport.length; i++) {
                             if (i > 0) doc.addPage();
                             let y = margin;
+                            const hasAnswer = !!imgCache[toExport[i].answer_image_url];
+                            // 可用高度：去掉标题(8mm)和底部留白(10mm)
+                            const availH = pageH - margin * 2 - 18;
+                            // 如果有答案，题目占60%，答案占40%；否则题目占全部
+                            const qMaxH = hasAnswer ? availH * 0.55 : availH;
+                            const aMaxH = availH * 0.4;
+
                             doc.setFont("helvetica", "bold");
                             doc.setFontSize(14);
                             doc.text(`#${i + 1}`, margin, y);
                             y += 8;
 
                             if (imgCache[toExport[i].question_image_url]) {
-                                y = await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
+                                y = await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`, qMaxH);
                             }
-                            if (imgCache[toExport[i].answer_image_url]) {
-                                y += 2;
+                            if (hasAnswer) {
+                                y += 3;
                                 doc.setFont("helvetica", "normal");
                                 doc.setFontSize(11);
                                 doc.text("Answer:", margin, y);
                                 y += 5;
-                                await addImage(doc, imgCache[toExport[i].answer_image_url], y, `Q${i+1}答案`);
+                                await addImage(doc, imgCache[toExport[i].answer_image_url], y, `Q${i+1}答案`, aMaxH);
                             }
                             addSpacing(doc, y, pageW, margin);
                         }
@@ -1835,9 +1841,8 @@
                             doc.text(`Question #${i + 1}`, margin, y);
                             y += 8;
                             if (imgCache[toExport[i].question_image_url]) {
-                                y = await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
+                                await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`, pageH - margin * 2 - 20);
                             }
-                            addSpacing(doc, y, pageW, margin);
                         }
                         // 分隔区域（4cm高）
                         const separatorH2 = 40;
@@ -1855,7 +1860,7 @@
                             doc.text(`Answer #${i + 1}`, margin, y);
                             y += 8;
                             if (imgCache[toExport[i].answer_image_url]) {
-                                await addImage(doc, imgCache[toExport[i].answer_image_url], y, `A${i+1}答案`);
+                                await addImage(doc, imgCache[toExport[i].answer_image_url], y, `A${i+1}答案`, pageH - margin * 2 - 20);
                             } else {
                                 doc.setFont("helvetica", "normal");
                                 doc.setFontSize(12);
