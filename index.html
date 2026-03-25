@@ -1267,22 +1267,34 @@
                     }
                 }
 
-                function addImage(doc, dataUrl, yStart) {
+                function addImage(doc, dataUrl, yStart, label) {
                     return new Promise((resolve) => {
+                        if (!dataUrl || dataUrl.length < 50) {
+                            console.warn("addImage: dataURL无效", label);
+                            resolve(yStart + 10);
+                            return;
+                        }
                         const img = new Image();
+                        let done = false;
+                        const finish = (fn) => { if (!done) { done = true; fn(); } };
                         img.onload = function() {
-                            const ratio = Math.min(maxW / img.width, (pageH - margin * 2 - yStart) / img.height, 1);
-                            const w = img.width * ratio;
-                            const h = img.height * ratio;
-                            if (yStart + h > pageH - margin) {
-                                doc.addPage();
-                                yStart = margin;
-                            }
-                            const x = (pageW - w) / 2;
-                            doc.addImage(dataUrl, "JPEG", x, yStart, w, h);
-                            resolve(yStart + h + 4);
+                            finish(() => {
+                                console.log("addImage ok:", label, img.width + "x" + img.height);
+                                const ratio = Math.min(maxW / img.width, (pageH - margin * 2 - yStart) / img.height, 1);
+                                const w = img.width * ratio;
+                                const h = img.height * ratio;
+                                if (yStart + h > pageH - margin) { doc.addPage(); yStart = margin; }
+                                const x = (pageW - w) / 2;
+                                doc.addImage(dataUrl, "JPEG", x, yStart, w, h);
+                                resolve(yStart + h + 4);
+                            });
                         };
-                        img.onerror = function() { console.warn("addImage: 图片渲染失败"); resolve(yStart + 10); };
+                        img.onerror = function() {
+                            finish(() => { console.warn("addImage error:", label); resolve(yStart + 10); });
+                        };
+                        setTimeout(() => {
+                            finish(() => { console.warn("addImage timeout:", label); resolve(yStart + 10); });
+                        }, 5000);
                         img.src = dataUrl;
                     });
                 }
@@ -1301,7 +1313,7 @@
                         y += 8;
 
                         if (imgCache[toExport[i].question_image_url]) {
-                            y = await addImage(doc, imgCache[toExport[i].question_image_url], y);
+                            y = await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
                         }
                         if (imgCache[toExport[i].answer_image_url]) {
                             y += 2;
@@ -1309,7 +1321,7 @@
                             doc.setFontSize(11);
                             doc.text("Answer:", margin, y);
                             y += 5;
-                            await addImage(doc, imgCache[toExport[i].answer_image_url], y);
+                            await addImage(doc, imgCache[toExport[i].answer_image_url], y, `Q${i+1}答案`);
                         }
                     }
                 } else {
@@ -1323,7 +1335,7 @@
                         doc.text(`Question #${i + 1}`, margin, y);
                         y += 8;
                         if (imgCache[toExport[i].question_image_url]) {
-                            await addImage(doc, imgCache[toExport[i].question_image_url], y);
+                            await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
                         }
                     }
 
@@ -1342,7 +1354,7 @@
                         doc.text(`Answer #${i + 1}`, margin, y);
                         y += 8;
                         if (imgCache[toExport[i].answer_image_url]) {
-                            await addImage(doc, imgCache[toExport[i].answer_image_url], y);
+                            await addImage(doc, imgCache[toExport[i].answer_image_url], y, `A${i+1}答案`);
                         } else {
                             doc.setFont("helvetica", "normal");
                             doc.setFontSize(12);
