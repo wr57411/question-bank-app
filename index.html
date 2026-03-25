@@ -7,6 +7,7 @@
         <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.6.1/dist/cropper.min.css" />
         <script src="https://unpkg.com/cropperjs@1.6.1/dist/cropper.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
         <style>
             * {
                 margin: 0;
@@ -182,6 +183,52 @@
 
             .tag-add-btn:hover {
                 background: #d1d5db;
+            }
+
+            /* 筛选栏 */
+            .filter-bar {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .filter-tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                flex: 1;
+            }
+            .filter-tag {
+                padding: 5px 12px;
+                border-radius: 16px;
+                border: 1.5px solid #ddd;
+                background: white;
+                cursor: pointer;
+                font-size: 13px;
+                transition: all 0.15s;
+                user-select: none;
+            }
+            .filter-tag:hover {
+                border-color: #aaa;
+            }
+            .filter-tag.active {
+                border-color: #3B82F6;
+                background: #3B82F6;
+                color: white;
+            }
+            #export-pdf-btn {
+                padding: 6px 14px;
+                font-size: 13px;
+                white-space: nowrap;
+                background: #10B981;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+            }
+            #export-pdf-btn:hover {
+                background: #059669;
             }
 
             .inline-tag-add {
@@ -488,6 +535,57 @@
                 flex: 1;
             }
 
+            /* 导出 PDF 弹窗 */
+            .export-modal-content {
+                max-width: 380px;
+                width: 90%;
+                padding: 24px;
+            }
+            .export-modal-content h3 {
+                margin-bottom: 16px;
+                font-size: 18px;
+                color: #333;
+            }
+            .export-modal-content .mode-option {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 12px;
+                border: 1.5px solid #e5e7eb;
+                border-radius: 10px;
+                cursor: pointer;
+                margin-bottom: 10px;
+                transition: all 0.15s;
+            }
+            .export-modal-content .mode-option:hover {
+                border-color: #3B82F6;
+                background: #f0f7ff;
+            }
+            .export-modal-content .mode-option.selected {
+                border-color: #3B82F6;
+                background: #eff6ff;
+            }
+            .export-modal-content .mode-option .mode-icon {
+                font-size: 24px;
+            }
+            .export-modal-content .mode-option .mode-label {
+                font-size: 15px;
+                font-weight: 500;
+                color: #333;
+            }
+            .export-modal-content .mode-option .mode-desc {
+                font-size: 12px;
+                color: #888;
+            }
+            .export-modal-content .btn-row {
+                display: flex;
+                gap: 10px;
+                margin-top: 20px;
+            }
+            .export-modal-content .btn-row button {
+                flex: 1;
+            }
+
             .status {
                 padding: 10px;
                 border-radius: 5px;
@@ -606,7 +704,11 @@
                 </div>
 
                 <div class="card">
-                    <h2>题目列表</h2>
+                    <h2>题目列表 <span id="question-count" style="font-size:14px;color:#888;font-weight:normal;"></span></h2>
+                    <div class="filter-bar">
+                        <div class="filter-tags" id="filter-tags"></div>
+                        <button id="export-pdf-btn" class="hidden" onclick="showExportModal()">📄 导出 PDF</button>
+                    </div>
                     <div class="question-grid" id="questions-list"></div>
                 </div>
             </div>
@@ -740,6 +842,32 @@
             </div>
         </div>
 
+        <!-- 导出 PDF 弹窗 -->
+        <div id="export-modal" class="modal" onclick="if(event.target===this)closeExportModal()">
+            <div class="modal-content export-modal-content">
+                <h3>导出 PDF</h3>
+                <div id="export-filter-summary" style="font-size:13px;color:#888;margin-bottom:14px;"></div>
+                <div class="mode-option selected" onclick="selectExportMode(this, 'merged')">
+                    <span class="mode-icon">📋</span>
+                    <div>
+                        <div class="mode-label">题目 + 答案在一起</div>
+                        <div class="mode-desc">每道题后面紧跟对应答案</div>
+                    </div>
+                </div>
+                <div class="mode-option" onclick="selectExportMode(this, 'separate')">
+                    <span class="mode-icon">📑</span>
+                    <div>
+                        <div class="mode-label">题目和答案分开</div>
+                        <div class="mode-desc">前面全部是题目，后面全部是答案，编号对应</div>
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button class="secondary" onclick="closeExportModal()">取消</button>
+                    <button onclick="exportPDF()" style="background:#10B981;color:white;border:none;">生成 PDF</button>
+                </div>
+            </div>
+        </div>
+
         <script>
             // Supabase 配置（需要替换为你的实际值）
             const SUPABASE_URL = "https://lpcttrgxxilqlpubrmyo.supabase.co";
@@ -755,6 +883,8 @@
             let currentCropTarget = null;
             let croppedImages = { question: null, answer: null };
             let originalImages = { question: null, answer: null }; // 保存原始图片 dataURL
+            let activeFilterTags = []; // 筛选标签
+            let exportMode = 'merged'; // 'merged' 或 'separate'
 
             // 点击裁剪图标时调用
             function startCrop(target) {
@@ -858,6 +988,7 @@
             function updateTagSelects() {
                 renderTagBlocks("tag-select");
                 renderTagBlocks("paper-tag-select");
+                renderFilterTags();
             }
 
             function renderTagBlocks(containerId) {
@@ -994,6 +1125,152 @@
                 } else {
                     showStatus("创建标签失败: " + (error?.message || ""), "error");
                 }
+            }
+
+            // ===== 导出 PDF =====
+            function showExportModal() {
+                const count = document.getElementById("question-count").textContent;
+                document.getElementById("export-filter-summary").textContent =
+                    activeFilterTags.length > 0
+                        ? `将导出当前筛选的 ${count} 道题目`
+                        : `将导出全部 ${allQuestions.length} 道题目`;
+                document.getElementById("export-modal").classList.add("active");
+            }
+
+            function closeExportModal() {
+                document.getElementById("export-modal").classList.remove("active");
+            }
+
+            function selectExportMode(el, mode) {
+                exportMode = mode;
+                document.querySelectorAll(".export-modal-content .mode-option").forEach(e => e.classList.remove("selected"));
+                el.classList.add("selected");
+            }
+
+            // 加载图片为 dataURL（跨域兼容）
+            async function loadImageAsDataURL(url) {
+                const resp = await fetch(url);
+                const blob = await resp.blob();
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            async function exportPDF() {
+                closeExportModal();
+                showStatus("正在生成 PDF，请稍候...", "success");
+
+                // 获取筛选后的题目
+                let filtered = allQuestions;
+                if (activeFilterTags.length > 0) {
+                    filtered = allQuestions.filter(q => {
+                        const qTagIds = q.question_tags.map(qt => qt.tags.id);
+                        return activeFilterTags.some(ft => qTagIds.includes(ft));
+                    });
+                }
+
+                if (filtered.length === 0) {
+                    showStatus("没有可导出的题目", "error");
+                    return;
+                }
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+                const pageW = 210, pageH = 297, margin = 15, maxW = pageW - margin * 2;
+
+                // 预加载所有图片
+                showStatus("正在加载图片...", "success");
+                const imgCache = {};
+                for (const q of filtered) {
+                    if (q.question_image_url && !imgCache[q.question_image_url]) {
+                        try { imgCache[q.question_image_url] = await loadImageAsDataURL(q.question_image_url); } catch {}
+                    }
+                    if (q.answer_image_url && !imgCache[q.answer_image_url]) {
+                        try { imgCache[q.answer_image_url] = await loadImageAsDataURL(q.answer_image_url); } catch {}
+                    }
+                }
+
+                function addImage(doc, dataUrl, yStart) {
+                    const img = new Image();
+                    img.src = dataUrl;
+                    const ratio = Math.min(maxW / img.width, (pageH - margin * 2 - yStart) / img.height, 1);
+                    const w = img.width * ratio;
+                    const h = img.height * ratio;
+                    // 如果图片放不下，加新页
+                    if (yStart + h > pageH - margin) {
+                        doc.addPage();
+                        yStart = margin;
+                    }
+                    const x = (pageW - w) / 2;
+                    doc.addImage(dataUrl, "JPEG", x, yStart, w, h);
+                    return yStart + h + 4;
+                }
+
+                if (exportMode === 'merged') {
+                    // 题目+答案在一起
+                    for (let i = 0; i < filtered.length; i++) {
+                        if (i > 0) doc.addPage();
+                        let y = margin;
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(14);
+                        doc.text(`#${i + 1}`, margin, y);
+                        y += 8;
+
+                        if (imgCache[filtered[i].question_image_url]) {
+                            y = addImage(doc, imgCache[filtered[i].question_image_url], y);
+                        }
+                        if (imgCache[filtered[i].answer_image_url]) {
+                            y += 2;
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(11);
+                            doc.text("Answer:", margin, y);
+                            y += 5;
+                            addImage(doc, imgCache[filtered[i].answer_image_url], y);
+                        }
+                    }
+                } else {
+                    // 题目和答案分开：先全部题目，再全部答案
+                    // 题目部分
+                    for (let i = 0; i < filtered.length; i++) {
+                        if (i > 0) doc.addPage();
+                        let y = margin;
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(14);
+                        doc.text(`Question #${i + 1}`, margin, y);
+                        y += 8;
+                        if (imgCache[filtered[i].question_image_url]) {
+                            addImage(doc, imgCache[filtered[i].question_image_url], y);
+                        }
+                    }
+
+                    // 分隔页
+                    doc.addPage();
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(20);
+                    doc.text("Answer Key", pageW / 2, pageH / 2, { align: "center" });
+
+                    // 答案部分
+                    for (let i = 0; i < filtered.length; i++) {
+                        doc.addPage();
+                        let y = margin;
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(14);
+                        doc.text(`Answer #${i + 1}`, margin, y);
+                        y += 8;
+                        if (imgCache[filtered[i].answer_image_url]) {
+                            addImage(doc, imgCache[filtered[i].answer_image_url], y);
+                        } else {
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(12);
+                            doc.text("(No answer)", margin, y);
+                        }
+                    }
+                }
+
+                doc.save("questions.pdf");
+                showStatus("✓ PDF 已生成！", "success");
             }
 
             // 添加标签
@@ -1272,10 +1549,46 @@
                 }
             }
 
+            // 渲染筛选标签栏
+            function renderFilterTags() {
+                const container = document.getElementById("filter-tags");
+                container.innerHTML = allTags.map(tag => {
+                    const isActive = activeFilterTags.includes(tag.id);
+                    const style = isActive
+                        ? `background:${tag.color};color:white;border-color:${tag.color}`
+                        : `background:white;color:${tag.color};border-color:${tag.color}40`;
+                    return `<span class="filter-tag ${isActive ? 'active' : ''}" style="${style}" onclick="toggleFilterTag('${tag.id}')">${tag.name}</span>`;
+                }).join("");
+            }
+
+            function toggleFilterTag(tagId) {
+                const idx = activeFilterTags.indexOf(tagId);
+                if (idx >= 0) activeFilterTags.splice(idx, 1);
+                else activeFilterTags.push(tagId);
+                renderFilterTags();
+                renderQuestions();
+            }
+
             // 渲染题目列表
             function renderQuestions() {
                 const container = document.getElementById("questions-list");
-                container.innerHTML = allQuestions
+
+                // 筛选
+                let filtered = allQuestions;
+                if (activeFilterTags.length > 0) {
+                    filtered = allQuestions.filter(q => {
+                        const qTagIds = q.question_tags.map(qt => qt.tags.id);
+                        return activeFilterTags.some(ft => qTagIds.includes(ft));
+                    });
+                }
+
+                // 更新计数和导出按钮
+                document.getElementById("question-count").textContent =
+                    activeFilterTags.length > 0 ? `(筛选: ${filtered.length}/${allQuestions.length})` : `(${allQuestions.length})`;
+                const exportBtn = document.getElementById("export-pdf-btn");
+                if (filtered.length > 0) exportBtn.classList.remove("hidden");
+                else exportBtn.classList.add("hidden");
+                container.innerHTML = filtered
                     .map((q) => {
                         const tags = q.question_tags.map((qt) => qt.tags);
                         const tagOptions = allTags
