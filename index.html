@@ -1363,13 +1363,22 @@
                     }
                 }
 
-                // 触发下载
-                doc.save("questions.pdf");
-                // 同时在新标签页打开（防止下载被拦截）
+                // 生成 blob URL
                 const pdfBlob = doc.output("blob");
                 const pdfUrl = URL.createObjectURL(pdfBlob);
-                window.open(pdfUrl, "_blank");
-                showStatus("✓ PDF 已生成！正在下载或在新标签页查看", "success");
+
+                // 创建可点击的下载链接（不依赖弹窗）
+                const link = document.createElement("a");
+                link.href = pdfUrl;
+                link.download = "questions.pdf";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+
+                // 同时在新标签页打开（如果浏览器允许的话）
+                try { window.open(pdfUrl, "_blank"); } catch {}
+
+                showStatus("✓ PDF 已生成！如果下载没有开始，<a href='" + pdfUrl + "' download='questions.pdf' style='color:#10B981;font-weight:bold;'>点击这里手动下载</a>", "success");
 
                 } catch (err) {
                     console.error("PDF export error:", err);
