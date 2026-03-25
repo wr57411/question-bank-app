@@ -1659,7 +1659,6 @@
                         // 双栏流式布局：先排满左栏，再排右栏
                         let col = 0; // 0=左栏, 1=右栏
                         let y = margin;
-                        doc.addPage();
                         for (let i = 0; i < toExport.length; i++) {
                             const x = margin + col * (colW + margin);
                             // 估算内容高度
@@ -1720,7 +1719,6 @@
                     if (isDouble) {
                         // 双栏 - 题目部分（流式：先左栏后右栏）
                         let col = 0, y = margin;
-                        doc.addPage();
                         for (let i = 0; i < toExport.length; i++) {
                             let estH = 16;
                             if (imgCache[toExport[i].question_image_url]) {
@@ -1747,7 +1745,6 @@
                         doc.text("Answer Key", pageW / 2, pageH / 2, { align: "center" });
                         // 双栏 - 答案部分（流式：先左栏后右栏）
                         let aCol = 0, aY = margin;
-                        doc.addPage();
                         for (let i = 0; i < toExport.length; i++) {
                             let estH = 16;
                             if (imgCache[toExport[i].answer_image_url]) {
