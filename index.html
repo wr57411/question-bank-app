@@ -1200,13 +1200,30 @@
             }
 
             // 加载图片为 dataURL（跨域兼容）
-            async function loadImageAsDataURL(url) {
-                const resp = await fetch(url);
-                const blob = await resp.blob();
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result);
-                    reader.readAsDataURL(blob);
+            function loadImageAsDataURL(url) {
+                return new Promise((resolve, reject) => {
+                    const tryWithCors = () => {
+                        const img = new Image();
+                        img.crossOrigin = "anonymous";
+                        img.onload = () => toDataURL(img, resolve, () => tryWithoutCors());
+                        img.onerror = () => tryWithoutCors();
+                        img.src = url;
+                    };
+                    const tryWithoutCors = () => {
+                        const img = new Image();
+                        img.onload = () => toDataURL(img, resolve, reject);
+                        img.onerror = () => reject(new Error("图片加载失败"));
+                        img.src = url + (url.includes("?") ? "&" : "?") + "t=" + Date.now();
+                    };
+                    const toDataURL = (img, ok, fail) => {
+                        try {
+                            const c = document.createElement("canvas");
+                            c.width = img.naturalWidth; c.height = img.naturalHeight;
+                            c.getContext("2d").drawImage(img, 0, 0);
+                            ok(c.toDataURL("image/jpeg", 0.92));
+                        } catch(e) { fail(e); }
+                    };
+                    tryWithCors();
                 });
             }
 
@@ -1243,10 +1260,10 @@
                 const imgCache = {};
                 for (const q of toExport) {
                     if (q.question_image_url && !imgCache[q.question_image_url]) {
-                        try { imgCache[q.question_image_url] = await loadImageAsDataURL(q.question_image_url); } catch {}
+                        try { imgCache[q.question_image_url] = await loadImageAsDataURL(q.question_image_url); } catch(e) { console.warn("题目图片加载失败:", q.question_image_url, e); }
                     }
                     if (q.answer_image_url && !imgCache[q.answer_image_url]) {
-                        try { imgCache[q.answer_image_url] = await loadImageAsDataURL(q.answer_image_url); } catch {}
+                        try { imgCache[q.answer_image_url] = await loadImageAsDataURL(q.answer_image_url); } catch(e) { console.warn("答案图片加载失败:", q.answer_image_url, e); }
                     }
                 }
 
@@ -1265,10 +1282,13 @@
                             doc.addImage(dataUrl, "JPEG", x, yStart, w, h);
                             resolve(yStart + h + 4);
                         };
-                        img.onerror = function() { resolve(yStart); };
+                        img.onerror = function() { console.warn("addImage: 图片渲染失败"); resolve(yStart + 10); };
                         img.src = dataUrl;
                     });
                 }
+
+                let imgLoadedCount = Object.keys(imgCache).length;
+                console.log(`PDF导出: ${toExport.length}题, ${imgLoadedCount}张图片已加载`);
 
                 if (exportMode === 'merged') {
                     // 题目+答案在一起
