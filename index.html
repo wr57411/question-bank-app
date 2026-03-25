@@ -728,9 +728,9 @@
             }
 
             // 初始化
-            document.addEventListener("DOMContentLoaded", () => {
-                loadTags();
-                loadQuestions();
+            document.addEventListener("DOMContentLoaded", async () => {
+                await Promise.all([loadTags(), loadQuestions()]);
+                renderQuestions(); // 两个数据都加载完后再渲染
                 loadPapers();
             });
 
