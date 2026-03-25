@@ -1642,7 +1642,7 @@
                 const colOffset = isDouble ? colW + margin : 0;
 
                 // 题后留空
-                const spacingMm = exportSpacing === 'large' ? 50 : exportSpacing === 'small' ? 20 : 0;
+                const spacingMm = exportSpacing === 'large' ? 80 : exportSpacing === 'small' ? 20 : 0;
                 function addSpacing(doc, y, pageW, margin) {
                     if (spacingMm <= 0) return y;
                     y += 4;
@@ -1656,47 +1656,40 @@
                 if (exportMode === 'merged') {
                     // 题目+答案在一起
                     if (isDouble) {
-                        // 双栏模式：每页放2题
-                        for (let i = 0; i < toExport.length; i += 2) {
-                            if (i > 0) doc.addPage();
-                            // 左栏
-                            let yL = margin;
+                        // 双栏流式布局：先排满左栏，再排右栏
+                        let col = 0; // 0=左栏, 1=右栏
+                        let y = margin;
+                        doc.addPage();
+                        for (let i = 0; i < toExport.length; i++) {
+                            const x = margin + col * (colW + margin);
+                            // 估算内容高度
+                            let estH = 16; // 标签高度
+                            if (imgCache[toExport[i].question_image_url]) {
+                                const tmpImg = new Image(); tmpImg.src = imgCache[toExport[i].question_image_url];
+                                estH += Math.min(colW / (tmpImg.naturalWidth || 1), 1) * (tmpImg.naturalHeight || 200) + 4;
+                            }
+                            if (imgCache[toExport[i].answer_image_url]) estH += 20;
+                            estH += spacingMm + 4;
+                            // 放不下就换栏或换页
+                            if (y + estH > pageH - margin && col === 0) { col = 1; y = margin; }
+                            else if (y + estH > pageH - margin && col === 1) { doc.addPage(); col = 0; y = margin; }
+                            const xCur = margin + col * (colW + margin);
                             doc.setFont("helvetica", "bold");
                             doc.setFontSize(12);
-                            doc.text(`#${i + 1}`, margin, yL);
-                            yL += 6;
+                            doc.text(`#${i + 1}`, xCur, y);
+                            y += 6;
                             if (imgCache[toExport[i].question_image_url]) {
-                                yL = await addImageDouble(doc, imgCache[toExport[i].question_image_url], yL, colW, pageH, margin, `Q${i+1}题目`, margin);
+                                y = await addImageDouble(doc, imgCache[toExport[i].question_image_url], y, colW, pageH, margin, `Q${i+1}题目`, xCur);
                             }
                             if (imgCache[toExport[i].answer_image_url]) {
-                                yL += 1;
+                                y += 1;
                                 doc.setFont("helvetica", "normal");
                                 doc.setFontSize(9);
-                                doc.text("Answer:", margin, yL);
-                                yL += 4;
-                                await addImageDouble(doc, imgCache[toExport[i].answer_image_url], yL, colW, pageH, margin, `Q${i+1}答案`, margin);
+                                doc.text("Answer:", xCur, y);
+                                y += 4;
+                                y = await addImageDouble(doc, imgCache[toExport[i].answer_image_url], y, colW, pageH, margin, `Q${i+1}答案`, xCur);
                             }
-                            // 右栏（如果有下一题）
-                            if (i + 1 < toExport.length) {
-                                let yR = margin;
-                                const xR = margin + colW + margin;
-                                doc.setFont("helvetica", "bold");
-                                doc.setFontSize(12);
-                                doc.text(`#${i + 2}`, xR, yR);
-                                yR += 6;
-                                if (imgCache[toExport[i+1].question_image_url]) {
-                                    yR = await addImageDouble(doc, imgCache[toExport[i+1].question_image_url], yR, colW, pageH, margin, `Q${i+2}题目`, xR);
-                                }
-                                if (imgCache[toExport[i+1].answer_image_url]) {
-                                    yR += 1;
-                                    doc.setFont("helvetica", "normal");
-                                    doc.setFontSize(9);
-                                    doc.text("Answer:", xR, yR);
-                                    yR += 4;
-                                    await addImageDouble(doc, imgCache[toExport[i+1].answer_image_url], yR, colW, pageH, margin, `Q${i+2}答案`, xR);
-                                }
-                            }
-                            addSpacing(doc, Math.max(yL, yR || 0), pageW, margin);
+                            y = addSpacing(doc, y, xCur + colW, xCur) + 2;
                         }
                     } else {
                         // 单栏模式（原逻辑）
@@ -1725,66 +1718,59 @@
                 } else {
                     // 题目和答案分开：先全部题目，再全部答案
                     if (isDouble) {
-                        // 双栏 - 题目部分
-                        for (let i = 0; i < toExport.length; i += 2) {
-                            if (i > 0) doc.addPage();
-                            let yL = margin;
+                        // 双栏 - 题目部分（流式：先左栏后右栏）
+                        let col = 0, y = margin;
+                        doc.addPage();
+                        for (let i = 0; i < toExport.length; i++) {
+                            let estH = 16;
+                            if (imgCache[toExport[i].question_image_url]) {
+                                const tmpImg = new Image(); tmpImg.src = imgCache[toExport[i].question_image_url];
+                                estH += Math.min(colW / (tmpImg.naturalWidth || 1), 1) * (tmpImg.naturalHeight || 200);
+                            }
+                            estH += spacingMm + 4;
+                            if (y + estH > pageH - margin && col === 0) { col = 1; y = margin; }
+                            else if (y + estH > pageH - margin && col === 1) { doc.addPage(); col = 0; y = margin; }
+                            const xCur = margin + col * (colW + margin);
                             doc.setFont("helvetica", "bold");
                             doc.setFontSize(12);
-                            doc.text(`#${i + 1}`, margin, yL);
-                            yL += 6;
+                            doc.text(`#${i + 1}`, xCur, y);
+                            y += 6;
                             if (imgCache[toExport[i].question_image_url]) {
-                                yL = await addImageDouble(doc, imgCache[toExport[i].question_image_url], yL, colW, pageH, margin, `Q${i+1}题目`, margin);
+                                y = await addImageDouble(doc, imgCache[toExport[i].question_image_url], y, colW, pageH, margin, `Q${i+1}题目`, xCur);
                             }
-                            let yR = 0;
-                            if (i + 1 < toExport.length) {
-                                yR = margin;
-                                const xR = margin + colW + margin;
-                                doc.setFont("helvetica", "bold");
-                                doc.setFontSize(12);
-                                doc.text(`#${i + 2}`, xR, yR);
-                                yR += 6;
-                                if (imgCache[toExport[i+1].question_image_url]) {
-                                    yR = await addImageDouble(doc, imgCache[toExport[i+1].question_image_url], yR, colW, pageH, margin, `Q${i+2}题目`, xR);
-                                }
-                            }
-                            addSpacing(doc, Math.max(yL, yR), pageW, margin);
+                            y = addSpacing(doc, y, xCur + colW, xCur) + 2;
                         }
                         // 分隔页
                         doc.addPage();
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(20);
                         doc.text("Answer Key", pageW / 2, pageH / 2, { align: "center" });
-                        // 双栏 - 答案部分
-                        for (let i = 0; i < toExport.length; i += 2) {
-                            doc.addPage();
-                            let yL = margin;
+                        // 双栏 - 答案部分（流式：先左栏后右栏）
+                        let aCol = 0, aY = margin;
+                        doc.addPage();
+                        for (let i = 0; i < toExport.length; i++) {
+                            let estH = 16;
+                            if (imgCache[toExport[i].answer_image_url]) {
+                                const tmpImg = new Image(); tmpImg.src = imgCache[toExport[i].answer_image_url];
+                                estH += Math.min(colW / (tmpImg.naturalWidth || 1), 1) * (tmpImg.naturalHeight || 200);
+                            } else { estH += 10; }
+                            estH += spacingMm + 4;
+                            if (aY + estH > pageH - margin && aCol === 0) { aCol = 1; aY = margin; }
+                            else if (aY + estH > pageH - margin && aCol === 1) { doc.addPage(); aCol = 0; aY = margin; }
+                            const xCur = margin + aCol * (colW + margin);
                             doc.setFont("helvetica", "bold");
                             doc.setFontSize(12);
-                            doc.text(`#${i + 1}`, margin, yL);
-                            yL += 6;
+                            doc.text(`#${i + 1}`, xCur, aY);
+                            aY += 6;
                             if (imgCache[toExport[i].answer_image_url]) {
-                                await addImageDouble(doc, imgCache[toExport[i].answer_image_url], yL, colW, pageH, margin, `A${i+1}答案`, margin);
+                                aY = await addImageDouble(doc, imgCache[toExport[i].answer_image_url], aY, colW, pageH, margin, `A${i+1}答案`, xCur);
                             } else {
                                 doc.setFont("helvetica", "normal");
                                 doc.setFontSize(10);
-                                doc.text("(No answer)", margin, yL);
+                                doc.text("(No answer)", xCur, aY);
+                                aY += 10;
                             }
-                            if (i + 1 < toExport.length) {
-                                let yR = margin;
-                                const xR = margin + colW + margin;
-                                doc.setFont("helvetica", "bold");
-                                doc.setFontSize(12);
-                                doc.text(`#${i + 2}`, xR, yR);
-                                yR += 6;
-                                if (imgCache[toExport[i+1].answer_image_url]) {
-                                    await addImageDouble(doc, imgCache[toExport[i+1].answer_image_url], yR, colW, pageH, margin, `A${i+2}答案`, xR);
-                                } else {
-                                    doc.setFont("helvetica", "normal");
-                                    doc.setFontSize(10);
-                                    doc.text("(No answer)", xR, yR);
-                                }
-                            }
+                            aY = addSpacing(doc, aY, xCur + colW, xCur) + 2;
                         }
                     } else {
                         // 单栏 - 题目部分
