@@ -725,6 +725,19 @@
                             <div id="answer-preview-label" class="preview-label hidden">✓ 答案图片已选择 <span class="crop-icon" onclick="startCrop('answer')" title="裁剪图片">✂️</span></div>
                         </div>
                         <div class="form-group">
+                            <label>排版适用性 *</label>
+                            <div style="display:flex;gap:12px;margin-top:6px;">
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:10px 16px;border:2px solid #e5e7eb;border-radius:10px;flex:1;text-align:center;transition:all .2s" class="layout-option" onclick="selectLayout(this, 0)">
+                                    <input type="radio" name="layout_type" value="0" required style="accent-color:#3B82F6">
+                                    <span>📐 仅适合单栏</span>
+                                </label>
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:10px 16px;border:2px solid #e5e7eb;border-radius:10px;flex:1;text-align:center;transition:all .2s" class="layout-option" onclick="selectLayout(this, 1)">
+                                    <input type="radio" name="layout_type" value="1" style="accent-color:#3B82F6">
+                                    <span>📏 单双栏均可</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
                             <label>选择标签 <span class="add-tag-inline" onclick="openNewTagModal('question')" title="新建标签">＋</span></label>
                             <div id="tag-select" class="tag-selector"></div>
                             <div id="inline-add-tag-question" class="inline-add-tag hidden">
@@ -887,23 +900,50 @@
             <div class="modal-content export-modal-content">
                 <h3>导出 PDF</h3>
                 <div id="export-filter-summary" style="font-size:13px;color:#888;margin-bottom:14px;"></div>
-                <div class="mode-option selected" onclick="selectExportMode(this, 'merged')">
-                    <span class="mode-icon">📋</span>
-                    <div>
-                        <div class="mode-label">题目 + 答案在一起</div>
-                        <div class="mode-desc">每道题后面紧跟对应答案</div>
+
+                <!-- 步骤1：选择试卷 -->
+                <div id="export-step-papers">
+                    <label style="font-weight:600;font-size:14px;margin-bottom:8px;display:block;">选择试卷</label>
+                    <div id="export-papers-list" style="max-height:35vh;overflow-y:auto;border:1px solid #e5e7eb;border-radius:10px;padding:4px;"></div>
+                </div>
+
+                <!-- 步骤2：选择排版格式 -->
+                <div style="margin-top:16px;">
+                    <label style="font-weight:600;font-size:14px;margin-bottom:8px;display:block;">请选择试卷排版格式</label>
+                    <div style="display:flex;gap:12px;">
+                        <div class="export-layout-option selected" onclick="selectExportLayout(this, 'single')" style="flex:1;text-align:center;padding:14px 8px;border:2px solid #3B82F6;border-radius:12px;cursor:pointer;background:#3B82F610;">
+                            <div style="font-size:24px;margin-bottom:4px;">📐</div>
+                            <div style="font-weight:600;font-size:14px;">单栏</div>
+                        </div>
+                        <div class="export-layout-option" onclick="selectExportLayout(this, 'double')" style="flex:1;text-align:center;padding:14px 8px;border:2px solid #e5e7eb;border-radius:12px;cursor:pointer;">
+                            <div style="font-size:24px;margin-bottom:4px;">📏</div>
+                            <div style="font-weight:600;font-size:14px;">双栏</div>
+                        </div>
                     </div>
                 </div>
-                <div class="mode-option" onclick="selectExportMode(this, 'separate')">
-                    <span class="mode-icon">📑</span>
-                    <div>
-                        <div class="mode-label">题目和答案分开</div>
-                        <div class="mode-desc">前面全部是题目，后面全部是答案，编号对应</div>
+
+                <!-- 导出模式 -->
+                <div style="margin-top:16px;">
+                    <label style="font-weight:600;font-size:14px;margin-bottom:8px;display:block;">题目与答案</label>
+                    <div class="mode-option selected" onclick="selectExportMode(this, 'merged')">
+                        <span class="mode-icon">📋</span>
+                        <div>
+                            <div class="mode-label">题目 + 答案在一起</div>
+                            <div class="mode-desc">每道题后面紧跟对应答案</div>
+                        </div>
+                    </div>
+                    <div class="mode-option" onclick="selectExportMode(this, 'separate')">
+                        <span class="mode-icon">📑</span>
+                        <div>
+                            <div class="mode-label">题目和答案分开</div>
+                            <div class="mode-desc">前面全部是题目，后面全部是答案，编号对应</div>
+                        </div>
                     </div>
                 </div>
+
                 <div class="btn-row">
                     <button class="secondary" onclick="closeExportModal()">取消</button>
-                    <button onclick="exportPDF()" style="background:#10B981;color:white;border:none;">生成 PDF</button>
+                    <button onclick="exportPDF()" style="background:#10B981;color:white;border:none;">确认导出</button>
                 </div>
             </div>
         </div>
@@ -925,7 +965,18 @@
             let originalImages = { question: null, answer: null }; // 保存原始图片 dataURL
             let activeFilterTags = []; // 筛选标签
             let exportMode = 'merged'; // 'merged' 或 'separate'
+            let exportLayout = 'single'; // 'single' 或 'double'
             let selectedQuestions = new Set(); // 勾选的题目ID
+
+            // 排版适用性选择高亮
+            function selectLayout(el, val) {
+                document.querySelectorAll('.layout-option').forEach(l => {
+                    l.style.borderColor = '#e5e7eb';
+                    l.style.background = '#fff';
+                });
+                el.style.borderColor = '#3B82F6';
+                el.style.background = '#3B82F610';
+            }
 
             // 点击裁剪图标时调用
             function startCrop(target) {
@@ -1186,7 +1237,48 @@
                     summary = `将导出全部 ${allQuestions.length} 道题目`;
                 }
                 document.getElementById("export-filter-summary").textContent = summary;
+
+                // 加载试卷列表（带勾选框）
+                loadExportPapers();
+
                 document.getElementById("export-modal").classList.add("active");
+            }
+
+            async function loadExportPapers() {
+                const container = document.getElementById("export-papers-list");
+                container.innerHTML = '<div style="padding:16px;text-align:center;color:#888;">加载中...</div>';
+
+                const { data, error } = await supabaseClient
+                    .from("papers")
+                    .select(`
+                        *,
+                        paper_questions (
+                            question_id,
+                            order_num,
+                            questions (id, layout_type)
+                        )
+                    `)
+                    .order("created_at", { ascending: false });
+
+                if (error || !data || data.length === 0) {
+                    container.innerHTML = '<div style="padding:16px;text-align:center;color:#888;">暂无试卷，可直接导出当前筛选结果</div>';
+                    return;
+                }
+
+                container.innerHTML = data.map(p => {
+                    const count = p.paper_questions?.length || 0;
+                    const date = new Date(p.created_at).toLocaleDateString();
+                    return `
+                        <label class="export-paper-item" style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:8px;cursor:pointer;transition:background .15s"
+                               onmouseenter="this.style.background='#f3f4f6'" onmouseleave="this.style.background='transparent'">
+                            <input type="checkbox" value="${p.id}" class="export-paper-cb" style="width:18px;height:18px;accent-color:#3B82F6;flex-shrink:0">
+                            <div style="flex:1;min-width:0">
+                                <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+                                <div style="font-size:12px;color:#888;margin-top:2px">${count} 道题 · ${date}</div>
+                            </div>
+                        </label>
+                    `;
+                }).join('');
             }
 
             function closeExportModal() {
@@ -1197,6 +1289,18 @@
                 exportMode = mode;
                 document.querySelectorAll(".export-modal-content .mode-option").forEach(e => e.classList.remove("selected"));
                 el.classList.add("selected");
+            }
+
+            function selectExportLayout(el, layout) {
+                exportLayout = layout;
+                document.querySelectorAll(".export-layout-option").forEach(e => {
+                    e.classList.remove("selected");
+                    e.style.borderColor = '#e5e7eb';
+                    e.style.background = '#fff';
+                });
+                el.classList.add("selected");
+                el.style.borderColor = '#3B82F6';
+                el.style.background = '#3B82F610';
             }
 
             // 加载图片为 dataURL（跨域兼容）
@@ -1233,9 +1337,30 @@
 
                 try {
 
+                // 获取选中的试卷
+                const selectedPaperIds = Array.from(document.querySelectorAll('.export-paper-cb:checked')).map(cb => cb.value);
+
                 // 获取要导出的题目
                 let toExport;
-                if (exportScope === 'selected') {
+                if (selectedPaperIds.length > 0) {
+                    // 从选中的试卷中获取题目
+                    const { data: pqData, error: pqError } = await supabaseClient
+                        .from("paper_questions")
+                        .select(`
+                            question_id,
+                            order_num,
+                            paper_id,
+                            questions (
+                                *,
+                                question_tags ( tags (*) )
+                            )
+                        `)
+                        .in("paper_id", selectedPaperIds)
+                        .order("order_num", { ascending: true });
+
+                    if (pqError) throw pqError;
+                    toExport = (pqData || []).map(pq => pq.questions).filter(Boolean);
+                } else if (exportScope === 'selected') {
                     toExport = allQuestions.filter(q => selectedQuestions.has(q.id));
                 } else if (activeFilterTags.length > 0) {
                     toExport = allQuestions.filter(q => {
@@ -1250,6 +1375,9 @@
                     showStatus("没有可导出的题目", "error");
                     return;
                 }
+
+                // 按排版适用性排序：仅单栏(0) 在前，单双栏均可(1) 在后
+                toExport.sort((a, b) => (a.layout_type || 0) - (b.layout_type || 0));
 
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -1299,66 +1427,208 @@
                     });
                 }
 
+                // 双栏模式的图片添加函数
+                function addImageDouble(doc, dataUrl, yStart, colW, pageH, margin, label, xStart) {
+                    return new Promise((resolve) => {
+                        if (!dataUrl || dataUrl.length < 50) {
+                            console.warn("addImageDouble: dataURL无效", label);
+                            resolve(yStart + 10);
+                            return;
+                        }
+                        const img = new Image();
+                        let done = false;
+                        const finish = (fn) => { if (!done) { done = true; fn(); } };
+                        img.onload = function() {
+                            finish(() => {
+                                const maxImgH = pageH - margin * 2 - yStart;
+                                const ratio = Math.min(colW / img.width, maxImgH / img.height, 1);
+                                const w = img.width * ratio;
+                                const h = img.height * ratio;
+                                if (yStart + h > pageH - margin) { resolve(yStart + 10); return; }
+                                doc.addImage(dataUrl, "JPEG", xStart, yStart, w, h);
+                                resolve(yStart + h + 3);
+                            });
+                        };
+                        img.onerror = function() {
+                            finish(() => { console.warn("addImageDouble error:", label); resolve(yStart + 10); });
+                        };
+                        setTimeout(() => {
+                            finish(() => { console.warn("addImageDouble timeout:", label); resolve(yStart + 10); });
+                        }, 5000);
+                        img.src = dataUrl;
+                    });
+                }
+
                 let imgLoadedCount = Object.keys(imgCache).length;
-                console.log(`PDF导出: ${toExport.length}题, ${imgLoadedCount}张图片已加载`);
+                console.log(`PDF导出: ${toExport.length}题, ${imgLoadedCount}张图片已加载, 排版:${exportLayout}`);
+
+                // 双栏模式：页面宽度减半
+                const isDouble = exportLayout === 'double';
+                const colW = isDouble ? (pageW - margin * 3) / 2 : pageW - margin * 2;
+                const colOffset = isDouble ? colW + margin : 0;
 
                 if (exportMode === 'merged') {
                     // 题目+答案在一起
-                    for (let i = 0; i < toExport.length; i++) {
-                        if (i > 0) doc.addPage();
-                        let y = margin;
-                        doc.setFont("helvetica", "bold");
-                        doc.setFontSize(14);
-                        doc.text(`#${i + 1}`, margin, y);
-                        y += 8;
-
-                        if (imgCache[toExport[i].question_image_url]) {
-                            y = await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
+                    if (isDouble) {
+                        // 双栏模式：每页放2题
+                        for (let i = 0; i < toExport.length; i += 2) {
+                            if (i > 0) doc.addPage();
+                            // 左栏
+                            let yL = margin;
+                            doc.setFont("helvetica", "bold");
+                            doc.setFontSize(12);
+                            doc.text(`#${i + 1}`, margin, yL);
+                            yL += 6;
+                            if (imgCache[toExport[i].question_image_url]) {
+                                yL = await addImageDouble(doc, imgCache[toExport[i].question_image_url], yL, colW, pageH, margin, `Q${i+1}题目`, margin);
+                            }
+                            if (imgCache[toExport[i].answer_image_url]) {
+                                yL += 1;
+                                doc.setFont("helvetica", "normal");
+                                doc.setFontSize(9);
+                                doc.text("Answer:", margin, yL);
+                                yL += 4;
+                                await addImageDouble(doc, imgCache[toExport[i].answer_image_url], yL, colW, pageH, margin, `Q${i+1}答案`, margin);
+                            }
+                            // 右栏（如果有下一题）
+                            if (i + 1 < toExport.length) {
+                                let yR = margin;
+                                const xR = margin + colW + margin;
+                                doc.setFont("helvetica", "bold");
+                                doc.setFontSize(12);
+                                doc.text(`#${i + 2}`, xR, yR);
+                                yR += 6;
+                                if (imgCache[toExport[i+1].question_image_url]) {
+                                    yR = await addImageDouble(doc, imgCache[toExport[i+1].question_image_url], yR, colW, pageH, margin, `Q${i+2}题目`, xR);
+                                }
+                                if (imgCache[toExport[i+1].answer_image_url]) {
+                                    yR += 1;
+                                    doc.setFont("helvetica", "normal");
+                                    doc.setFontSize(9);
+                                    doc.text("Answer:", xR, yR);
+                                    yR += 4;
+                                    await addImageDouble(doc, imgCache[toExport[i+1].answer_image_url], yR, colW, pageH, margin, `Q${i+2}答案`, xR);
+                                }
+                            }
                         }
-                        if (imgCache[toExport[i].answer_image_url]) {
-                            y += 2;
-                            doc.setFont("helvetica", "normal");
-                            doc.setFontSize(11);
-                            doc.text("Answer:", margin, y);
-                            y += 5;
-                            await addImage(doc, imgCache[toExport[i].answer_image_url], y, `Q${i+1}答案`);
+                    } else {
+                        // 单栏模式（原逻辑）
+                        for (let i = 0; i < toExport.length; i++) {
+                            if (i > 0) doc.addPage();
+                            let y = margin;
+                            doc.setFont("helvetica", "bold");
+                            doc.setFontSize(14);
+                            doc.text(`#${i + 1}`, margin, y);
+                            y += 8;
+
+                            if (imgCache[toExport[i].question_image_url]) {
+                                y = await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
+                            }
+                            if (imgCache[toExport[i].answer_image_url]) {
+                                y += 2;
+                                doc.setFont("helvetica", "normal");
+                                doc.setFontSize(11);
+                                doc.text("Answer:", margin, y);
+                                y += 5;
+                                await addImage(doc, imgCache[toExport[i].answer_image_url], y, `Q${i+1}答案`);
+                            }
                         }
                     }
                 } else {
                     // 题目和答案分开：先全部题目，再全部答案
-                    // 题目部分
-                    for (let i = 0; i < toExport.length; i++) {
-                        if (i > 0) doc.addPage();
-                        let y = margin;
-                        doc.setFont("helvetica", "bold");
-                        doc.setFontSize(14);
-                        doc.text(`Question #${i + 1}`, margin, y);
-                        y += 8;
-                        if (imgCache[toExport[i].question_image_url]) {
-                            await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
-                        }
-                    }
-
-                    // 分隔页
-                    doc.addPage();
-                    doc.setFont("helvetica", "bold");
-                    doc.setFontSize(20);
-                    doc.text("Answer Key", pageW / 2, pageH / 2, { align: "center" });
-
-                    // 答案部分
-                    for (let i = 0; i < toExport.length; i++) {
-                        doc.addPage();
-                        let y = margin;
-                        doc.setFont("helvetica", "bold");
-                        doc.setFontSize(14);
-                        doc.text(`Answer #${i + 1}`, margin, y);
-                        y += 8;
-                        if (imgCache[toExport[i].answer_image_url]) {
-                            await addImage(doc, imgCache[toExport[i].answer_image_url], y, `A${i+1}答案`);
-                        } else {
-                            doc.setFont("helvetica", "normal");
+                    if (isDouble) {
+                        // 双栏 - 题目部分
+                        for (let i = 0; i < toExport.length; i += 2) {
+                            if (i > 0) doc.addPage();
+                            let yL = margin;
+                            doc.setFont("helvetica", "bold");
                             doc.setFontSize(12);
-                            doc.text("(No answer)", margin, y);
+                            doc.text(`#${i + 1}`, margin, yL);
+                            yL += 6;
+                            if (imgCache[toExport[i].question_image_url]) {
+                                await addImageDouble(doc, imgCache[toExport[i].question_image_url], yL, colW, pageH, margin, `Q${i+1}题目`, margin);
+                            }
+                            if (i + 1 < toExport.length) {
+                                let yR = margin;
+                                const xR = margin + colW + margin;
+                                doc.setFont("helvetica", "bold");
+                                doc.setFontSize(12);
+                                doc.text(`#${i + 2}`, xR, yR);
+                                yR += 6;
+                                if (imgCache[toExport[i+1].question_image_url]) {
+                                    await addImageDouble(doc, imgCache[toExport[i+1].question_image_url], yR, colW, pageH, margin, `Q${i+2}题目`, xR);
+                                }
+                            }
+                        }
+                        // 分隔页
+                        doc.addPage();
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(20);
+                        doc.text("Answer Key", pageW / 2, pageH / 2, { align: "center" });
+                        // 双栏 - 答案部分
+                        for (let i = 0; i < toExport.length; i += 2) {
+                            doc.addPage();
+                            let yL = margin;
+                            doc.setFont("helvetica", "bold");
+                            doc.setFontSize(12);
+                            doc.text(`#${i + 1}`, margin, yL);
+                            yL += 6;
+                            if (imgCache[toExport[i].answer_image_url]) {
+                                await addImageDouble(doc, imgCache[toExport[i].answer_image_url], yL, colW, pageH, margin, `A${i+1}答案`, margin);
+                            } else {
+                                doc.setFont("helvetica", "normal");
+                                doc.setFontSize(10);
+                                doc.text("(No answer)", margin, yL);
+                            }
+                            if (i + 1 < toExport.length) {
+                                let yR = margin;
+                                const xR = margin + colW + margin;
+                                doc.setFont("helvetica", "bold");
+                                doc.setFontSize(12);
+                                doc.text(`#${i + 2}`, xR, yR);
+                                yR += 6;
+                                if (imgCache[toExport[i+1].answer_image_url]) {
+                                    await addImageDouble(doc, imgCache[toExport[i+1].answer_image_url], yR, colW, pageH, margin, `A${i+2}答案`, xR);
+                                } else {
+                                    doc.setFont("helvetica", "normal");
+                                    doc.setFontSize(10);
+                                    doc.text("(No answer)", xR, yR);
+                                }
+                            }
+                        }
+                    } else {
+                        // 单栏 - 题目部分
+                        for (let i = 0; i < toExport.length; i++) {
+                            if (i > 0) doc.addPage();
+                            let y = margin;
+                            doc.setFont("helvetica", "bold");
+                            doc.setFontSize(14);
+                            doc.text(`Question #${i + 1}`, margin, y);
+                            y += 8;
+                            if (imgCache[toExport[i].question_image_url]) {
+                                await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
+                            }
+                        }
+                        // 分隔页
+                        doc.addPage();
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(20);
+                        doc.text("Answer Key", pageW / 2, pageH / 2, { align: "center" });
+                        // 单栏 - 答案部分
+                        for (let i = 0; i < toExport.length; i++) {
+                            doc.addPage();
+                            let y = margin;
+                            doc.setFont("helvetica", "bold");
+                            doc.setFontSize(14);
+                            doc.text(`Answer #${i + 1}`, margin, y);
+                            y += 8;
+                            if (imgCache[toExport[i].answer_image_url]) {
+                                await addImage(doc, imgCache[toExport[i].answer_image_url], y, `A${i+1}答案`);
+                            } else {
+                                doc.setFont("helvetica", "normal");
+                                doc.setFontSize(12);
+                                doc.text("(No answer)", margin, y);
+                            }
                         }
                     }
                 }
@@ -1579,6 +1849,10 @@
                                 .getPublicUrl(answerPath).data.publicUrl;
                         }
 
+                        // 获取排版适用性
+                        const layoutRadio = document.querySelector('input[name="layout_type"]:checked');
+                        const layoutType = layoutRadio ? parseInt(layoutRadio.value) : 0;
+
                         // 创建题目记录
                         const { data: question, error: insertError } =
                             await supabaseClient
@@ -1586,6 +1860,7 @@
                                 .insert({
                                     question_image_url: questionUrl,
                                     answer_image_url: answerUrl,
+                                    layout_type: layoutType,
                                 })
                                 .select()
                                 .single();
@@ -1612,6 +1887,8 @@
                         document.getElementById("answer-preview-label").classList.add("hidden");
                         // 清除标签选中状态
                         document.querySelectorAll("#tag-select .tag-block.selected").forEach(el => toggleTagBlock(el));
+                        // 清除排版选中状态
+                        document.querySelectorAll('.layout-option').forEach(l => { l.style.borderColor = '#e5e7eb'; l.style.background = '#fff'; });
                         croppedImages = { question: null, answer: null };
 
                         // 恢复按钮
