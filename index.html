@@ -621,6 +621,105 @@
                 flex: 1;
             }
 
+            /* 试题篮悬浮按钮 */
+            .basket-fab {
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                width: 56px;
+                height: 56px;
+                border-radius: 50%;
+                background: #3B82F6;
+                color: white;
+                border: none;
+                box-shadow: 0 4px 14px rgba(59,130,246,0.4);
+                cursor: pointer;
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 24px;
+                transition: transform .2s, box-shadow .2s;
+            }
+            .basket-fab:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(59,130,246,0.5); }
+            .basket-fab .badge {
+                position: absolute;
+                top: -4px;
+                right: -4px;
+                min-width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                background: #EF4444;
+                color: white;
+                font-size: 12px;
+                font-weight: 700;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0 5px;
+            }
+
+            /* 可展开的试卷项 */
+            .paper-expand-item { border-bottom: 1px solid #f3f4f6; }
+            .paper-expand-item:last-child { border-bottom: none; }
+            .paper-header {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 12px;
+                cursor: pointer;
+                transition: background .15s;
+                user-select: none;
+            }
+            .paper-header:hover { background: #f9fafb; }
+            .paper-header .arrow {
+                font-size: 12px;
+                color: #888;
+                transition: transform .2s;
+                flex-shrink: 0;
+            }
+            .paper-header .arrow.open { transform: rotate(90deg); }
+            .paper-header .paper-info { flex: 1; min-width: 0; }
+            .paper-header .paper-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .paper-header .paper-meta { font-size: 12px; color: #888; margin-top: 2px; }
+
+            /* 试卷内的题目列表 */
+            .paper-questions {
+                display: none;
+                padding: 0 12px 8px 36px;
+            }
+            .paper-questions.open { display: block; }
+            .pq-item {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 8px 6px;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: background .15s;
+            }
+            .pq-item:hover { background: #f3f4f6; }
+            .pq-thumb {
+                width: 44px;
+                height: 44px;
+                border-radius: 6px;
+                object-fit: cover;
+                flex-shrink: 0;
+                background: #f3f4f6;
+            }
+            .pq-info { flex: 1; min-width: 0; }
+            .pq-num { font-size: 13px; font-weight: 600; color: #333; }
+            .pq-tags { font-size: 11px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .pq-layout {
+                font-size: 11px;
+                padding: 2px 8px;
+                border-radius: 4px;
+                flex-shrink: 0;
+                font-weight: 500;
+            }
+            .pq-layout.single { background: #dbeafe; color: #1d4ed8; }
+            .pq-layout.both { background: #d1fae5; color: #065f46; }
+
             .status {
                 padding: 10px;
                 border-radius: 5px;
@@ -903,7 +1002,7 @@
 
                 <!-- 步骤1：选择试卷 -->
                 <div id="export-step-papers">
-                    <label style="font-weight:600;font-size:14px;margin-bottom:8px;display:block;">选择试卷</label>
+                    <label style="font-weight:600;font-size:14px;margin-bottom:8px;display:block;">选择试卷（点击展开勾选题目加入试题篮）</label>
                     <div id="export-papers-list" style="max-height:35vh;overflow-y:auto;border:1px solid #e5e7eb;border-radius:10px;padding:4px;"></div>
                 </div>
 
@@ -967,6 +1066,8 @@
             let exportMode = 'merged'; // 'merged' 或 'separate'
             let exportLayout = 'single'; // 'single' 或 'double'
             let selectedQuestions = new Set(); // 勾选的题目ID
+            let questionBasket = new Set(); // 试题篮中的题目ID
+            let paperExpanded = new Set(); // 展开的试卷ID
 
             // 排版适用性选择高亮
             function selectLayout(el, val) {
@@ -1242,6 +1343,8 @@
                 loadExportPapers();
 
                 document.getElementById("export-modal").classList.add("active");
+                document.getElementById("basket-fab").style.display = "flex";
+                updateBasketBadge();
             }
 
             async function loadExportPapers() {
@@ -1255,35 +1358,158 @@
                         paper_questions (
                             question_id,
                             order_num,
-                            questions (id, layout_type)
+                            questions (id, layout_type, question_image_url, question_tags ( tags (name) ))
                         )
                     `)
                     .order("created_at", { ascending: false });
 
                 if (error || !data || data.length === 0) {
-                    container.innerHTML = '<div style="padding:16px;text-align:center;color:#888;">暂无试卷，可直接导出当前筛选结果</div>';
+                    container.innerHTML = '<div style="padding:16px;text-align:center;color:#888;">暂无试卷</div>';
                     return;
                 }
 
+                window._exportPapersData = data;
+                renderExportPapers();
+            }
+
+            function renderExportPapers() {
+                const container = document.getElementById("export-papers-list");
+                const data = window._exportPapersData || [];
+
                 container.innerHTML = data.map(p => {
-                    const count = p.paper_questions?.length || 0;
+                    const questions = (p.paper_questions || []).sort((a, b) => a.order_num - b.order_num);
+                    const count = questions.length;
                     const date = new Date(p.created_at).toLocaleDateString();
+                    const isExpanded = paperExpanded.has(p.id);
+                    const selectedInPaper = questions.filter(q => questionBasket.has(q.question_id)).length;
+
+                    let questionsHtml = '';
+                    if (isExpanded && questions.length > 0) {
+                        questionsHtml = `<div class="paper-questions open">${questions.map((pq, idx) => {
+                            const q = pq.questions;
+                            if (!q) return '';
+                            const inBasket = questionBasket.has(q.question_id);
+                            const tags = (q.question_tags || []).map(t => t.tags?.name).filter(Boolean).join(', ');
+                            const layoutClass = q.layout_type === 0 ? 'single' : 'both';
+                            const layoutLabel = q.layout_type === 0 ? '单栏' : '双栏可';
+                            return `
+                                <div class="pq-item" onclick="toggleBasketQuestion('${q.question_id}', this)">
+                                    <input type="checkbox" ${inBasket ? 'checked' : ''} style="width:16px;height:16px;accent-color:#3B82F6;flex-shrink:0" onclick="event.stopPropagation();toggleBasketQuestion('${q.question_id}', this.parentElement)">
+                                    <img class="pq-thumb" src="${q.question_image_url}" alt="题目" loading="lazy">
+                                    <div class="pq-info">
+                                        <div class="pq-num">第${idx + 1}题</div>
+                                        <div class="pq-tags">${tags || '无标签'}</div>
+                                    </div>
+                                    <span class="pq-layout ${layoutClass}">${layoutLabel}</span>
+                                </div>
+                            `;
+                        }).join('')}</div>`;
+                    }
+
+                    const badge = selectedInPaper > 0 ? `<span style="font-size:11px;background:#3B82F6;color:white;padding:1px 6px;border-radius:8px;margin-left:6px">${selectedInPaper}</span>` : '';
+
                     return `
-                        <label class="export-paper-item" style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:8px;cursor:pointer;transition:background .15s"
-                               onmouseenter="this.style.background='#f3f4f6'" onmouseleave="this.style.background='transparent'">
-                            <input type="checkbox" value="${p.id}" class="export-paper-cb" style="width:18px;height:18px;accent-color:#3B82F6;flex-shrink:0">
-                            <div style="flex:1;min-width:0">
-                                <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
-                                <div style="font-size:12px;color:#888;margin-top:2px">${count} 道题 · ${date}</div>
+                        <div class="paper-expand-item">
+                            <div class="paper-header" onclick="togglePaperExpand('${p.id}')">
+                                <span class="arrow ${isExpanded ? 'open' : ''}">▶</span>
+                                <div class="paper-info">
+                                    <div class="paper-name">${p.name}${badge}</div>
+                                    <div class="paper-meta">${count} 道题 · ${date}</div>
+                                </div>
                             </div>
-                        </label>
+                            ${questionsHtml}
+                        </div>
                     `;
                 }).join('');
             }
 
+            function togglePaperExpand(paperId) {
+                if (paperExpanded.has(paperId)) {
+                    paperExpanded.delete(paperId);
+                } else {
+                    paperExpanded.add(paperId);
+                }
+                renderExportPapers();
+            }
+
+            function toggleBasketQuestion(questionId) {
+                if (questionBasket.has(questionId)) {
+                    questionBasket.delete(questionId);
+                } else {
+                    questionBasket.add(questionId);
+                }
+                updateBasketBadge();
+                renderExportPapers();
+            }
+
+            function updateBasketBadge() {
+                const badge = document.getElementById("basket-badge");
+                const count = questionBasket.size;
+                badge.textContent = count;
+                badge.style.display = count > 0 ? "flex" : "none";
+            }
+
+            function openBasketModal() {
+                const modal = document.getElementById("basket-modal");
+                const items = document.getElementById("basket-items");
+                const countEl = document.getElementById("basket-modal-count");
+
+                if (questionBasket.size === 0) {
+                    items.innerHTML = '<div style="padding:24px;text-align:center;color:#888;">试题篮是空的，请先勾选题目</div>';
+                } else {
+                    // 收集篮中题目的信息
+                    const allPqs = [];
+                    (window._exportPapersData || []).forEach(p => {
+                        (p.paper_questions || []).forEach(pq => {
+                            if (pq.questions && questionBasket.has(pq.questions.id || pq.question_id)) {
+                                allPqs.push({ paper: p.name, ...pq.questions });
+                            }
+                        });
+                    });
+
+                    items.innerHTML = allPqs.map((q, i) => {
+                        const tags = (q.question_tags || []).map(t => t.tags?.name).filter(Boolean).join(', ');
+                        const layoutLabel = q.layout_type === 0 ? '单栏' : '双栏可';
+                        return `
+                            <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #f3f4f6">
+                                <span style="font-size:13px;color:#888;flex-shrink:0;width:20px">${i + 1}</span>
+                                <img src="${q.question_image_url}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0">
+                                <div style="flex:1;min-width:0">
+                                    <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.paper || ''}</div>
+                                    <div style="font-size:11px;color:#888">${tags || '无标签'} · ${layoutLabel}</div>
+                                </div>
+                                <span style="cursor:pointer;color:#EF4444;font-size:16px;padding:4px" onclick="toggleBasketQuestion('${q.id || q.question_id}');openBasketModal()">✕</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                countEl.textContent = `(${questionBasket.size}题)`;
+                modal.classList.add("active");
+            }
+
+            function closeBasketModal() {
+                document.getElementById("basket-modal").classList.remove("active");
+            }
+
+            async function exportFromBasket() {
+                if (questionBasket.size === 0) {
+                    showStatus("试题篮是空的，请先勾选题目", "error");
+                    return;
+                }
+                // 收集篮中题目
+                const basketQuestions = allQuestions.filter(q => questionBasket.has(q.id));
+
+                closeBasketModal();
+                await exportPDF(basketQuestions);
+            }
+
             function closeExportModal() {
                 document.getElementById("export-modal").classList.remove("active");
+                document.getElementById("basket-fab").style.display = "none";
             }
+
+            // 注意：试题篮不在关闭弹窗时清空，用户可以在多次展开收起间保持选择
 
             function selectExportMode(el, mode) {
                 exportMode = mode;
@@ -1331,44 +1557,47 @@
                 });
             }
 
-            async function exportPDF() {
+            async function exportPDF(basketQuestions) {
                 closeExportModal();
                 showStatus("正在生成 PDF，请稍候...", "success");
 
                 try {
 
-                // 获取选中的试卷
-                const selectedPaperIds = Array.from(document.querySelectorAll('.export-paper-cb:checked')).map(cb => cb.value);
-
                 // 获取要导出的题目
                 let toExport;
-                if (selectedPaperIds.length > 0) {
-                    // 从选中的试卷中获取题目
-                    const { data: pqData, error: pqError } = await supabaseClient
-                        .from("paper_questions")
-                        .select(`
-                            question_id,
-                            order_num,
-                            paper_id,
-                            questions (
-                                *,
-                                question_tags ( tags (*) )
-                            )
-                        `)
-                        .in("paper_id", selectedPaperIds)
-                        .order("order_num", { ascending: true });
-
-                    if (pqError) throw pqError;
-                    toExport = (pqData || []).map(pq => pq.questions).filter(Boolean);
-                } else if (exportScope === 'selected') {
-                    toExport = allQuestions.filter(q => selectedQuestions.has(q.id));
-                } else if (activeFilterTags.length > 0) {
-                    toExport = allQuestions.filter(q => {
-                        const qTagIds = q.question_tags.map(qt => qt.tags.id);
-                        return activeFilterTags.some(ft => qTagIds.includes(ft));
-                    });
+                if (basketQuestions) {
+                    // 从试题篮导出
+                    toExport = basketQuestions;
                 } else {
-                    toExport = [...allQuestions];
+                    const selectedPaperIds = Array.from(document.querySelectorAll('.export-paper-cb:checked')).map(cb => cb.value);
+                    if (selectedPaperIds.length > 0) {
+                        // 从选中的试卷中获取题目
+                        const { data: pqData, error: pqError } = await supabaseClient
+                            .from("paper_questions")
+                            .select(`
+                                question_id,
+                                order_num,
+                                paper_id,
+                                questions (
+                                    *,
+                                    question_tags ( tags (*) )
+                                )
+                            `)
+                            .in("paper_id", selectedPaperIds)
+                            .order("order_num", { ascending: true });
+
+                        if (pqError) throw pqError;
+                        toExport = (pqData || []).map(pq => pq.questions).filter(Boolean);
+                    } else if (exportScope === 'selected') {
+                        toExport = allQuestions.filter(q => selectedQuestions.has(q.id));
+                    } else if (activeFilterTags.length > 0) {
+                        toExport = allQuestions.filter(q => {
+                            const qTagIds = q.question_tags.map(qt => qt.tags.id);
+                            return activeFilterTags.some(ft => qTagIds.includes(ft));
+                        });
+                    } else {
+                        toExport = [...allQuestions];
+                    }
                 }
 
                 if (toExport.length === 0) {
@@ -2249,5 +2478,23 @@
                 // error 消息不自动消失
             }
         </script>
+        <!-- 试题篮悬浮按钮 -->
+        <button id="basket-fab" class="basket-fab" style="display:none" onclick="openBasketModal()">
+            🧺
+            <span class="badge" id="basket-badge" style="display:none">0</span>
+        </button>
+
+        <!-- 试题篮弹窗 -->
+        <div id="basket-modal" class="modal" onclick="if(event.target===this)closeBasketModal()">
+            <div class="modal-content export-modal-content">
+                <h3>🧺 试题篮 <span id="basket-modal-count" style="font-size:13px;color:#888;font-weight:400"></span></h3>
+                <div id="basket-items" style="max-height:50vh;overflow-y:auto;"></div>
+                <div class="btn-row" style="margin-top:16px;">
+                    <button class="secondary" onclick="closeBasketModal()">取消</button>
+                    <button onclick="exportFromBasket()" style="background:#10B981;color:white;border:none;">确认导出</button>
+                </div>
+            </div>
+        </div>
+
     </body>
 </html>
