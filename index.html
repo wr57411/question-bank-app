@@ -1214,6 +1214,8 @@
                 closeExportModal();
                 showStatus("正在生成 PDF，请稍候...", "success");
 
+                try {
+
                 // 获取要导出的题目
                 let toExport;
                 if (exportScope === 'selected') {
@@ -1249,19 +1251,23 @@
                 }
 
                 function addImage(doc, dataUrl, yStart) {
-                    const img = new Image();
-                    img.src = dataUrl;
-                    const ratio = Math.min(maxW / img.width, (pageH - margin * 2 - yStart) / img.height, 1);
-                    const w = img.width * ratio;
-                    const h = img.height * ratio;
-                    // 如果图片放不下，加新页
-                    if (yStart + h > pageH - margin) {
-                        doc.addPage();
-                        yStart = margin;
-                    }
-                    const x = (pageW - w) / 2;
-                    doc.addImage(dataUrl, "JPEG", x, yStart, w, h);
-                    return yStart + h + 4;
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = function() {
+                            const ratio = Math.min(maxW / img.width, (pageH - margin * 2 - yStart) / img.height, 1);
+                            const w = img.width * ratio;
+                            const h = img.height * ratio;
+                            if (yStart + h > pageH - margin) {
+                                doc.addPage();
+                                yStart = margin;
+                            }
+                            const x = (pageW - w) / 2;
+                            doc.addImage(dataUrl, "JPEG", x, yStart, w, h);
+                            resolve(yStart + h + 4);
+                        };
+                        img.onerror = function() { resolve(yStart); };
+                        img.src = dataUrl;
+                    });
                 }
 
                 if (exportMode === 'merged') {
@@ -1275,7 +1281,7 @@
                         y += 8;
 
                         if (imgCache[toExport[i].question_image_url]) {
-                            y = addImage(doc, imgCache[toExport[i].question_image_url], y);
+                            y = await addImage(doc, imgCache[toExport[i].question_image_url], y);
                         }
                         if (imgCache[toExport[i].answer_image_url]) {
                             y += 2;
@@ -1283,7 +1289,7 @@
                             doc.setFontSize(11);
                             doc.text("Answer:", margin, y);
                             y += 5;
-                            addImage(doc, imgCache[toExport[i].answer_image_url], y);
+                            await addImage(doc, imgCache[toExport[i].answer_image_url], y);
                         }
                     }
                 } else {
@@ -1297,7 +1303,7 @@
                         doc.text(`Question #${i + 1}`, margin, y);
                         y += 8;
                         if (imgCache[toExport[i].question_image_url]) {
-                            addImage(doc, imgCache[toExport[i].question_image_url], y);
+                            await addImage(doc, imgCache[toExport[i].question_image_url], y);
                         }
                     }
 
@@ -1316,7 +1322,7 @@
                         doc.text(`Answer #${i + 1}`, margin, y);
                         y += 8;
                         if (imgCache[toExport[i].answer_image_url]) {
-                            addImage(doc, imgCache[toExport[i].answer_image_url], y);
+                            await addImage(doc, imgCache[toExport[i].answer_image_url], y);
                         } else {
                             doc.setFont("helvetica", "normal");
                             doc.setFontSize(12);
@@ -1327,6 +1333,11 @@
 
                 doc.save("questions.pdf");
                 showStatus("✓ PDF 已生成！", "success");
+
+                } catch (err) {
+                    console.error("PDF export error:", err);
+                    showStatus("PDF 生成失败: " + err.message, "error");
+                }
             }
 
             // 添加标签
