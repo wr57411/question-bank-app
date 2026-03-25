@@ -1013,14 +1013,17 @@
                         <div class="export-spacing-option selected" onclick="selectExportSpacing(this, 'none')" style="flex:1;text-align:center;padding:10px 6px;border:2px solid #3B82F6;border-radius:10px;cursor:pointer;background:#3B82F610;">
                             <div style="font-size:18px;margin-bottom:2px;">📏</div>
                             <div style="font-size:13px;font-weight:600;">无空</div>
+                            <div style="font-size:11px;color:#888;margin-top:2px;">0 cm</div>
                         </div>
                         <div class="export-spacing-option" onclick="selectExportSpacing(this, 'small')" style="flex:1;text-align:center;padding:10px 6px;border:2px solid #e5e7eb;border-radius:10px;cursor:pointer;">
                             <div style="font-size:18px;margin-bottom:2px;">📐</div>
                             <div style="font-size:13px;font-weight:600;">少量</div>
+                            <div style="margin-top:2px;"><input type="number" id="spacing-small-cm" value="2" min="0" max="20" step="0.5" onclick="event.stopPropagation()" oninput="updateSpacingValue('small', this.value)" style="width:48px;text-align:center;font-size:12px;border:1px solid #ddd;border-radius:4px;padding:2px;"> cm</div>
                         </div>
                         <div class="export-spacing-option" onclick="selectExportSpacing(this, 'large')" style="flex:1;text-align:center;padding:10px 6px;border:2px solid #e5e7eb;border-radius:10px;cursor:pointer;">
                             <div style="font-size:18px;margin-bottom:2px;">📄</div>
                             <div style="font-size:13px;font-weight:600;">大量</div>
+                            <div style="margin-top:2px;"><input type="number" id="spacing-large-cm" value="8" min="0" max="30" step="0.5" onclick="event.stopPropagation()" oninput="updateSpacingValue('large', this.value)" style="width:48px;text-align:center;font-size:12px;border:1px solid #ddd;border-radius:4px;padding:2px;"> cm</div>
                         </div>
                     </div>
                 </div>
@@ -1051,6 +1054,7 @@
             let exportMode = 'merged'; // 'merged' 或 'separate'
             let exportLayout = 'single'; // 'single' 或 'double'
             let exportSpacing = 'none'; // 'none', 'small', 'large'
+            let spacingValues = { small: 2, large: 8 }; // cm
             let selectedQuestions = new Set(); // 勾选的题目ID
             let questionBasket = new Set(); // 试题篮中的题目ID
 
@@ -1473,6 +1477,10 @@
                 el.style.background = '#3B82F610';
             }
 
+            function updateSpacingValue(key, val) {
+                spacingValues[key] = parseFloat(val) || 0;
+            }
+
             // 加载图片为 dataURL（跨域兼容）
             function loadImageAsDataURL(url) {
                 return new Promise((resolve, reject) => {
@@ -1642,7 +1650,7 @@
                 const colOffset = isDouble ? colW + margin : 0;
 
                 // 题后留空
-                const spacingMm = exportSpacing === 'large' ? 80 : exportSpacing === 'small' ? 20 : 0;
+                const spacingMm = exportSpacing === 'large' ? spacingValues.large * 10 : exportSpacing === 'small' ? spacingValues.small * 10 : 0;
                 function addSpacing(doc, y, pageW, margin) {
                     if (spacingMm <= 0) return y;
                     y += 4;
@@ -1738,13 +1746,15 @@
                             }
                             y = addSpacing(doc, y, xCur + colW, xCur) + 2;
                         }
-                        // 分隔页
-                        doc.addPage();
+                        // 分隔区域（4cm高）
+                        const separatorH = 40; // mm
+                        doc.setFillColor(245, 245, 245);
+                        doc.rect(margin, margin, pageW - margin * 2, separatorH, 'F');
                         doc.setFont("helvetica", "bold");
-                        doc.setFontSize(20);
-                        doc.text("Answer Key", pageW / 2, pageH / 2, { align: "center" });
+                        doc.setFontSize(16);
+                        doc.text("Answer Key", pageW / 2, margin + separatorH / 2 + 2, { align: "center" });
                         // 双栏 - 答案部分（流式：先左栏后右栏）
-                        let aCol = 0, aY = margin;
+                        let aCol = 0, aY = margin + separatorH + 6;
                         for (let i = 0; i < toExport.length; i++) {
                             let estH = 16;
                             if (imgCache[toExport[i].answer_image_url]) {
@@ -1783,14 +1793,18 @@
                             }
                             addSpacing(doc, y, pageW, margin);
                         }
-                        // 分隔页
-                        doc.addPage();
+                        // 分隔区域（4cm高）
+                        const separatorH2 = 40;
+                        doc.setFillColor(245, 245, 245);
+                        doc.rect(margin, margin, pageW - margin * 2, separatorH2, 'F');
                         doc.setFont("helvetica", "bold");
-                        doc.setFontSize(20);
-                        doc.text("Answer Key", pageW / 2, pageH / 2, { align: "center" });
+                        doc.setFontSize(16);
+                        doc.text("Answer Key", pageW / 2, margin + separatorH2 / 2 + 2, { align: "center" });
                         // 单栏 - 答案部分
+                        let singleAnsStarted = false;
                         for (let i = 0; i < toExport.length; i++) {
-                            doc.addPage();
+                            if (singleAnsStarted) doc.addPage();
+                            singleAnsStarted = true;
                             let y = margin;
                             doc.setFont("helvetica", "bold");
                             doc.setFontSize(14);
