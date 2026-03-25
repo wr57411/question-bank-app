@@ -434,6 +434,60 @@
                 font-size: 13px;
             }
 
+            /* 新建标签弹窗 */
+            .new-tag-modal-content {
+                max-width: 360px;
+                width: 90%;
+                padding: 24px;
+            }
+            .new-tag-modal-content h3 {
+                margin-bottom: 16px;
+                font-size: 18px;
+                color: #333;
+            }
+            .new-tag-modal-content .form-group {
+                margin-bottom: 16px;
+            }
+            .new-tag-modal-content label {
+                display: block;
+                margin-bottom: 6px;
+                font-size: 14px;
+                color: #555;
+            }
+            .new-tag-modal-content input[type="text"] {
+                width: 100%;
+                padding: 10px 12px;
+                border: 1.5px solid #ddd;
+                border-radius: 8px;
+                font-size: 15px;
+                outline: none;
+                transition: border-color 0.2s;
+            }
+            .new-tag-modal-content input[type="text"]:focus {
+                border-color: #3B82F6;
+            }
+            .new-tag-modal-content .color-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .new-tag-modal-content input[type="color"] {
+                width: 40px;
+                height: 40px;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                padding: 0;
+            }
+            .new-tag-modal-content .btn-row {
+                display: flex;
+                gap: 10px;
+                margin-top: 20px;
+            }
+            .new-tag-modal-content .btn-row button {
+                flex: 1;
+            }
+
             .status {
                 padding: 10px;
                 border-radius: 5px;
@@ -538,7 +592,7 @@
                             <div id="answer-preview-label" class="preview-label hidden">✓ 答案图片已选择 <span class="crop-icon" onclick="startCrop('answer')" title="裁剪图片">✂️</span></div>
                         </div>
                         <div class="form-group">
-                            <label>选择标签 <span class="add-tag-inline" onclick="showInlineAddTag('question')" title="添加新标签">＋</span></label>
+                            <label>选择标签 <span class="add-tag-inline" onclick="openNewTagModal('question')" title="新建标签">＋</span></label>
                             <div id="tag-select" class="tag-selector"></div>
                             <div id="inline-add-tag-question" class="inline-add-tag hidden">
                                 <input type="text" id="inline-tag-name-question" placeholder="输入标签名称" onkeydown="if(event.key==='Enter'){event.preventDefault();addInlineTag('question')}" />
@@ -604,7 +658,7 @@
                             />
                         </div>
                         <div class="form-group">
-                            <label>按标签选题 <span class="add-tag-inline" onclick="showInlineAddTag('paper')" title="添加新标签">＋</span></label>
+                            <label>按标签选题 <span class="add-tag-inline" onclick="openNewTagModal('paper')" title="新建标签">＋</span></label>
                             <div id="paper-tag-select" class="tag-selector"></div>
                             <div id="inline-add-tag-paper" class="inline-add-tag hidden">
                                 <input type="text" id="inline-tag-name-paper" placeholder="输入标签名称" onkeydown="if(event.key==='Enter'){event.preventDefault();addInlineTag('paper')}" />
@@ -660,6 +714,28 @@
                     <button class="danger" onclick="event.stopPropagation(); deleteQuestion()">
                         删除题目
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 新建标签弹窗 -->
+        <div id="new-tag-modal" class="modal" onclick="if(event.target===this)closeNewTagModal()">
+            <div class="modal-content new-tag-modal-content">
+                <h3>新建标签</h3>
+                <div class="form-group">
+                    <label>标签名称</label>
+                    <input type="text" id="new-tag-name" placeholder="输入标签名称" onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewTag()}" />
+                </div>
+                <div class="form-group">
+                    <label>标签颜色</label>
+                    <div class="color-row">
+                        <input type="color" id="new-tag-color" value="#3B82F6" />
+                        <span id="new-tag-color-hex" style="color:#888;font-size:13px;">#3B82F6</span>
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button class="secondary" onclick="closeNewTagModal()">取消</button>
+                    <button onclick="submitNewTag()">创建</button>
                 </div>
             </div>
         </div>
@@ -840,6 +916,83 @@
                     });
                 } else {
                     showStatus("添加标签失败: " + (error?.message || ""), "error");
+                }
+            }
+
+            // ===== 新建标签弹窗 =====
+            let newTagContext = null; // 'question' 或 'paper'
+            let newTagTargetQuestionId = null; // 从题目卡片打开时记录题目ID
+
+            function openNewTagModal(context) {
+                newTagContext = context;
+                newTagTargetQuestionId = null;
+                document.getElementById("new-tag-modal").classList.add("active");
+                document.getElementById("new-tag-name").value = "";
+                document.getElementById("new-tag-color").value = "#3B82F6";
+                document.getElementById("new-tag-color-hex").textContent = "#3B82F6";
+                setTimeout(() => document.getElementById("new-tag-name").focus(), 100);
+            }
+
+            function openNewTagModalFromCard(questionId) {
+                newTagContext = 'card';
+                newTagTargetQuestionId = questionId;
+                document.getElementById("new-tag-modal").classList.add("active");
+                document.getElementById("new-tag-name").value = "";
+                document.getElementById("new-tag-color").value = "#3B82F6";
+                document.getElementById("new-tag-color-hex").textContent = "#3B82F6";
+                setTimeout(() => document.getElementById("new-tag-name").focus(), 100);
+            }
+
+            function closeNewTagModal() {
+                document.getElementById("new-tag-modal").classList.remove("active");
+                newTagContext = null;
+                newTagTargetQuestionId = null;
+            }
+
+            // 颜色选择器同步显示 hex 值
+            document.getElementById("new-tag-color").addEventListener("input", function() {
+                document.getElementById("new-tag-color-hex").textContent = this.value;
+            });
+
+            async function submitNewTag() {
+                const name = document.getElementById("new-tag-name").value.trim();
+                const color = document.getElementById("new-tag-color").value;
+                if (!name) {
+                    document.getElementById("new-tag-name").focus();
+                    return;
+                }
+
+                const { data, error } = await supabaseClient
+                    .from("tags")
+                    .insert({ name, color })
+                    .select()
+                    .single();
+
+                if (!error && data) {
+                    allTags.push(data);
+                    updateTagSelects();
+                    const createdName = name;
+                    const createdId = data.id;
+
+                    // 如果从题目卡片打开，自动添加标签到该题目
+                    if (newTagContext === 'card' && newTagTargetQuestionId) {
+                        const qid = newTagTargetQuestionId;
+                        closeNewTagModal();
+                        // 直接插入关联
+                        await supabaseClient.from("question_tags").insert({ question_id: qid, tag_id: createdId });
+                        loadQuestions();
+                        showStatus("标签「" + createdName + "」创建并已添加", "success");
+                    } else {
+                        closeNewTagModal();
+                        showStatus("标签「" + createdName + "」创建成功", "success");
+                        // 自动选中新添加的标签
+                        const containerId = newTagContext === 'paper' ? 'paper-tag-select' : 'tag-select';
+                        document.querySelectorAll(`#${containerId} .tag-block[data-tag-id="${createdId}"]`).forEach(el => {
+                            if (!el.classList.contains("selected")) toggleTagBlock(el);
+                        });
+                    }
+                } else {
+                    showStatus("创建标签失败: " + (error?.message || ""), "error");
                 }
             }
 
@@ -1135,13 +1288,11 @@
                         <div class="info" onclick="showQuestionDetail('${q.id}')">
                             <div class="tags">
                                 ${tags.map((t) => `<span class="tag" style="background: ${t.color}20">${t.name}</span>`).join("")}
-                                ${tagOptions ? `<span class="tag-add-btn" onclick="event.stopPropagation(); toggleInlineTagAdd('${q.id}')">+</span>` : ""}
+                                <span class="tag-add-btn" onclick="event.stopPropagation(); toggleInlineTagAdd('${q.id}')">+</span>
                             </div>
                             <div id="inline-add-${q.id}" class="inline-tag-add hidden">
-                                <select id="inline-tag-select-${q.id}">
-                                    ${tagOptions}
-                                </select>
-                                <button onclick="event.stopPropagation(); addTagToQuestion('${q.id}')">添加</button>
+                                ${tagOptions ? `<select id="inline-tag-select-${q.id}">${tagOptions}</select><button onclick="event.stopPropagation(); addTagToQuestion('${q.id}')">添加</button>` : '<span style="color:#888;font-size:13px;">没有可添加的标签</span>'}
+                                <button onclick="event.stopPropagation(); openNewTagModalFromCard('${q.id}')">新建标签</button>
                                 <button class="secondary" onclick="event.stopPropagation(); toggleInlineTagAdd('${q.id}')">取消</button>
                             </div>
                         </div>
