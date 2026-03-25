@@ -1363,8 +1363,13 @@
                     }
                 }
 
+                // 触发下载
                 doc.save("questions.pdf");
-                showStatus("✓ PDF 已生成！", "success");
+                // 同时在新标签页打开（防止下载被拦截）
+                const pdfBlob = doc.output("blob");
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                window.open(pdfUrl, "_blank");
+                showStatus("✓ PDF 已生成！正在下载或在新标签页查看", "success");
 
                 } catch (err) {
                     console.error("PDF export error:", err);
@@ -1953,7 +1958,7 @@
                 if (type === 'success') {
                     setTimeout(() => {
                         container.innerHTML = "";
-                    }, 5000);
+                    }, 15000);
                 }
                 // error 消息不自动消失
             }
