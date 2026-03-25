@@ -165,6 +165,45 @@
                 color: #666;
             }
 
+            .tag-add-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 28px;
+                height: 28px;
+                background: #e5e7eb;
+                border: 1px dashed #999;
+                border-radius: 15px;
+                font-size: 16px;
+                cursor: pointer;
+                color: #666;
+                line-height: 1;
+            }
+
+            .tag-add-btn:hover {
+                background: #d1d5db;
+            }
+
+            .inline-tag-add {
+                display: flex;
+                gap: 6px;
+                align-items: center;
+                margin-top: 6px;
+            }
+
+            .inline-tag-add select {
+                flex: 1;
+                padding: 4px 8px;
+                font-size: 12px;
+                height: 28px;
+            }
+
+            .inline-tag-add button {
+                padding: 4px 10px;
+                font-size: 12px;
+                height: 28px;
+            }
+
             .question-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -225,12 +264,14 @@
 
             .modal-content {
                 background: white;
-                padding: 30px;
+                padding: 24px;
+                padding-bottom: 32px;
                 border-radius: 10px;
                 max-width: 500px;
-                width: 90%;
-                max-height: 80vh;
+                width: 92%;
+                max-height: 85vh;
                 overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
             }
 
             .hidden {
@@ -407,6 +448,26 @@
             .status.error {
                 background: #fee2e2;
                 color: #991b1b;
+            }
+
+            @media (max-width: 480px) {
+                .container {
+                    padding: 10px;
+                }
+                .question-grid {
+                    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                    gap: 10px;
+                }
+                .modal-content {
+                    width: 96%;
+                    padding: 16px;
+                    padding-bottom: 24px;
+                    -webkit-overflow-scrolling: touch;
+                }
+                .modal-content button {
+                    width: 100%;
+                    margin-bottom: 6px;
+                }
             }
         </style>
     </head>
@@ -594,11 +655,12 @@
                 <div id="modal-question-image"></div>
                 <div id="modal-answer-image"></div>
                 <div id="modal-tags"></div>
-                <br />
-                <button class="danger" onclick="deleteQuestion()">
-                    删除题目
-                </button>
-                <button class="secondary" onclick="closeModal()">关闭</button>
+                <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; display: flex; gap: 10px;">
+                    <button class="secondary" onclick="closeModal()">关闭</button>
+                    <button class="danger" onclick="event.stopPropagation(); deleteQuestion()">
+                        删除题目
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1063,18 +1125,53 @@
                 container.innerHTML = allQuestions
                     .map((q) => {
                         const tags = q.question_tags.map((qt) => qt.tags);
+                        const tagOptions = allTags
+                            .filter(t => !tags.some(qt => qt.id === t.id))
+                            .map(t => `<option value="${t.id}">${t.name}</option>`)
+                            .join("");
                         return `
-                    <div class="question-card" onclick="showQuestionDetail('${q.id}')">
-                        <img src="${q.question_image_url}" alt="题目">
-                        <div class="info">
+                    <div class="question-card" data-id="${q.id}">
+                        <img src="${q.question_image_url}" alt="题目" onclick="showQuestionDetail('${q.id}')">
+                        <div class="info" onclick="showQuestionDetail('${q.id}')">
                             <div class="tags">
                                 ${tags.map((t) => `<span class="tag" style="background: ${t.color}20">${t.name}</span>`).join("")}
+                                ${tagOptions ? `<span class="tag-add-btn" onclick="event.stopPropagation(); toggleInlineTagAdd('${q.id}')">+</span>` : ""}
+                            </div>
+                            <div id="inline-add-${q.id}" class="inline-tag-add hidden">
+                                <select id="inline-tag-select-${q.id}">
+                                    ${tagOptions}
+                                </select>
+                                <button onclick="event.stopPropagation(); addTagToQuestion('${q.id}')">添加</button>
+                                <button class="secondary" onclick="event.stopPropagation(); toggleInlineTagAdd('${q.id}')">取消</button>
                             </div>
                         </div>
                     </div>
                 `;
                     })
                     .join("");
+            }
+
+            // 切换行内加标签界面
+            function toggleInlineTagAdd(questionId) {
+                const el = document.getElementById(`inline-add-${questionId}`);
+                el.classList.toggle("hidden");
+            }
+
+            // 给题目添加标签
+            async function addTagToQuestion(questionId) {
+                const select = document.getElementById(`inline-tag-select-${questionId}`);
+                const tagId = select.value;
+                if (!tagId) return;
+
+                const { error } = await supabaseClient
+                    .from("question_tags")
+                    .insert({ question_id: questionId, tag_id: tagId });
+
+                if (!error) {
+                    loadQuestions();
+                } else {
+                    alert("添加标签失败: " + error.message);
+                }
             }
 
             // 显示题目详情
