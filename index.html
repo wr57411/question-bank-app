@@ -231,6 +231,41 @@
                 background: #059669;
             }
 
+            /* 题目勾选 */
+            .question-card {
+                position: relative;
+            }
+            .question-card .q-checkbox {
+                position: absolute;
+                top: 8px;
+                left: 8px;
+                z-index: 2;
+                width: 22px;
+                height: 22px;
+                border-radius: 6px;
+                border: 2px solid #ccc;
+                background: white;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                transition: all 0.15s;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            }
+            .question-card .q-checkbox:hover {
+                border-color: #3B82F6;
+            }
+            .question-card .q-checkbox.checked {
+                background: #3B82F6;
+                border-color: #3B82F6;
+                color: white;
+            }
+            .question-card.selected {
+                outline: 2.5px solid #3B82F6;
+                outline-offset: -2px;
+            }
+
             .inline-tag-add {
                 display: flex;
                 gap: 6px;
@@ -704,10 +739,15 @@
                 </div>
 
                 <div class="card">
-                    <h2>题目列表 <span id="question-count" style="font-size:14px;color:#888;font-weight:normal;"></span></h2>
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                        <h2 style="margin:0;">题目列表 <span id="question-count" style="font-size:14px;color:#888;font-weight:normal;"></span></h2>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <span id="selected-count" style="font-size:13px;color:#3B82F6;display:none;">已选 <b id="selected-num">0</b> 题</span>
+                            <button id="export-pdf-btn" onclick="exportSelectedOrAll()" style="padding:8px 16px;font-size:14px;background:#10B981;color:white;border:none;border-radius:8px;cursor:pointer;">📄 导出 PDF</button>
+                        </div>
+                    </div>
                     <div class="filter-bar">
                         <div class="filter-tags" id="filter-tags"></div>
-                        <button id="export-pdf-btn" class="hidden" onclick="showExportModal()">📄 导出 PDF</button>
                     </div>
                     <div class="question-grid" id="questions-list"></div>
                 </div>
@@ -885,6 +925,7 @@
             let originalImages = { question: null, answer: null }; // 保存原始图片 dataURL
             let activeFilterTags = []; // 筛选标签
             let exportMode = 'merged'; // 'merged' 或 'separate'
+            let selectedQuestions = new Set(); // 勾选的题目ID
 
             // 点击裁剪图标时调用
             function startCrop(target) {
@@ -1128,12 +1169,23 @@
             }
 
             // ===== 导出 PDF =====
-            function showExportModal() {
-                const count = document.getElementById("question-count").textContent;
-                document.getElementById("export-filter-summary").textContent =
-                    activeFilterTags.length > 0
-                        ? `将导出当前筛选的 ${count} 道题目`
-                        : `将导出全部 ${allQuestions.length} 道题目`;
+            let exportScope = 'all'; // 'all' 或 'selected'
+
+            function showExportModal(scope) {
+                exportScope = scope || 'all';
+                let summary = '';
+                if (exportScope === 'selected') {
+                    summary = `将导出已勾选的 ${selectedQuestions.size} 道题目`;
+                } else if (activeFilterTags.length > 0) {
+                    const filtered = allQuestions.filter(q => {
+                        const qTagIds = q.question_tags.map(qt => qt.tags.id);
+                        return activeFilterTags.some(ft => qTagIds.includes(ft));
+                    });
+                    summary = `将导出筛选结果 ${filtered.length} 道题目`;
+                } else {
+                    summary = `将导出全部 ${allQuestions.length} 道题目`;
+                }
+                document.getElementById("export-filter-summary").textContent = summary;
                 document.getElementById("export-modal").classList.add("active");
             }
 
@@ -1162,16 +1214,20 @@
                 closeExportModal();
                 showStatus("正在生成 PDF，请稍候...", "success");
 
-                // 获取筛选后的题目
-                let filtered = allQuestions;
-                if (activeFilterTags.length > 0) {
-                    filtered = allQuestions.filter(q => {
+                // 获取要导出的题目
+                let toExport;
+                if (exportScope === 'selected') {
+                    toExport = allQuestions.filter(q => selectedQuestions.has(q.id));
+                } else if (activeFilterTags.length > 0) {
+                    toExport = allQuestions.filter(q => {
                         const qTagIds = q.question_tags.map(qt => qt.tags.id);
                         return activeFilterTags.some(ft => qTagIds.includes(ft));
                     });
+                } else {
+                    toExport = [...allQuestions];
                 }
 
-                if (filtered.length === 0) {
+                if (toExport.length === 0) {
                     showStatus("没有可导出的题目", "error");
                     return;
                 }
@@ -1183,7 +1239,7 @@
                 // 预加载所有图片
                 showStatus("正在加载图片...", "success");
                 const imgCache = {};
-                for (const q of filtered) {
+                for (const q of toExport) {
                     if (q.question_image_url && !imgCache[q.question_image_url]) {
                         try { imgCache[q.question_image_url] = await loadImageAsDataURL(q.question_image_url); } catch {}
                     }
@@ -1210,7 +1266,7 @@
 
                 if (exportMode === 'merged') {
                     // 题目+答案在一起
-                    for (let i = 0; i < filtered.length; i++) {
+                    for (let i = 0; i < toExport.length; i++) {
                         if (i > 0) doc.addPage();
                         let y = margin;
                         doc.setFont("helvetica", "bold");
@@ -1218,30 +1274,30 @@
                         doc.text(`#${i + 1}`, margin, y);
                         y += 8;
 
-                        if (imgCache[filtered[i].question_image_url]) {
-                            y = addImage(doc, imgCache[filtered[i].question_image_url], y);
+                        if (imgCache[toExport[i].question_image_url]) {
+                            y = addImage(doc, imgCache[toExport[i].question_image_url], y);
                         }
-                        if (imgCache[filtered[i].answer_image_url]) {
+                        if (imgCache[toExport[i].answer_image_url]) {
                             y += 2;
                             doc.setFont("helvetica", "normal");
                             doc.setFontSize(11);
                             doc.text("Answer:", margin, y);
                             y += 5;
-                            addImage(doc, imgCache[filtered[i].answer_image_url], y);
+                            addImage(doc, imgCache[toExport[i].answer_image_url], y);
                         }
                     }
                 } else {
                     // 题目和答案分开：先全部题目，再全部答案
                     // 题目部分
-                    for (let i = 0; i < filtered.length; i++) {
+                    for (let i = 0; i < toExport.length; i++) {
                         if (i > 0) doc.addPage();
                         let y = margin;
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(14);
                         doc.text(`Question #${i + 1}`, margin, y);
                         y += 8;
-                        if (imgCache[filtered[i].question_image_url]) {
-                            addImage(doc, imgCache[filtered[i].question_image_url], y);
+                        if (imgCache[toExport[i].question_image_url]) {
+                            addImage(doc, imgCache[toExport[i].question_image_url], y);
                         }
                     }
 
@@ -1252,15 +1308,15 @@
                     doc.text("Answer Key", pageW / 2, pageH / 2, { align: "center" });
 
                     // 答案部分
-                    for (let i = 0; i < filtered.length; i++) {
+                    for (let i = 0; i < toExport.length; i++) {
                         doc.addPage();
                         let y = margin;
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(14);
                         doc.text(`Answer #${i + 1}`, margin, y);
                         y += 8;
-                        if (imgCache[filtered[i].answer_image_url]) {
-                            addImage(doc, imgCache[filtered[i].answer_image_url], y);
+                        if (imgCache[toExport[i].answer_image_url]) {
+                            addImage(doc, imgCache[toExport[i].answer_image_url], y);
                         } else {
                             doc.setFont("helvetica", "normal");
                             doc.setFontSize(12);
@@ -1569,6 +1625,41 @@
                 renderQuestions();
             }
 
+            // 勾选题目
+            function toggleQuestionSelect(qId, el) {
+                if (selectedQuestions.has(qId)) {
+                    selectedQuestions.delete(qId);
+                    el.classList.remove('checked');
+                    el.textContent = '';
+                    el.closest('.question-card').classList.remove('selected');
+                } else {
+                    selectedQuestions.add(qId);
+                    el.classList.add('checked');
+                    el.textContent = '✓';
+                    el.closest('.question-card').classList.add('selected');
+                }
+                updateSelectedCount();
+            }
+
+            function updateSelectedCount() {
+                const el = document.getElementById("selected-count");
+                if (selectedQuestions.size > 0) {
+                    el.style.display = "inline";
+                    document.getElementById("selected-num").textContent = selectedQuestions.size;
+                } else {
+                    el.style.display = "none";
+                }
+            }
+
+            // 导出：有勾选则导出勾选的，否则导出筛选结果或全部
+            function exportSelectedOrAll() {
+                if (selectedQuestions.size > 0) {
+                    showExportModal('selected');
+                } else {
+                    showExportModal('all');
+                }
+            }
+
             // 渲染题目列表
             function renderQuestions() {
                 const container = document.getElementById("questions-list");
@@ -1582,12 +1673,10 @@
                     });
                 }
 
-                // 更新计数和导出按钮
+                // 更新计数
                 document.getElementById("question-count").textContent =
                     activeFilterTags.length > 0 ? `(筛选: ${filtered.length}/${allQuestions.length})` : `(${allQuestions.length})`;
-                const exportBtn = document.getElementById("export-pdf-btn");
-                if (filtered.length > 0) exportBtn.classList.remove("hidden");
-                else exportBtn.classList.add("hidden");
+                updateSelectedCount();
                 container.innerHTML = filtered
                     .map((q) => {
                         const tags = q.question_tags.map((qt) => qt.tags);
@@ -1595,8 +1684,10 @@
                             .filter(t => !tags.some(qt => qt.id === t.id))
                             .map(t => `<option value="${t.id}">${t.name}</option>`)
                             .join("");
+                        const isChecked = selectedQuestions.has(q.id);
                         return `
-                    <div class="question-card" data-id="${q.id}">
+                    <div class="question-card ${isChecked ? 'selected' : ''}" data-id="${q.id}">
+                        <div class="q-checkbox ${isChecked ? 'checked' : ''}" onclick="event.stopPropagation(); toggleQuestionSelect('${q.id}', this)">${isChecked ? '✓' : ''}</div>
                         <img src="${q.question_image_url}" alt="题目" onclick="showQuestionDetail('${q.id}')">
                         <div class="info" onclick="showQuestionDetail('${q.id}')">
                             <div class="tags">
