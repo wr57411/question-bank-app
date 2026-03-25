@@ -1819,12 +1819,10 @@
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(16);
                         doc.text("Answer Key", pageW / 2, margin + separatorH2 / 2 + 2, { align: "center" });
-                        // 单栏 - 答案部分
-                        let singleAnsStarted = false;
+                        // 单栏 - 答案部分（直接在 Answer Key 区域下方开始）
                         for (let i = 0; i < toExport.length; i++) {
-                            if (singleAnsStarted) doc.addPage();
-                            singleAnsStarted = true;
-                            let y = margin;
+                            if (i > 0) doc.addPage();
+                            let y = (i === 0) ? margin + separatorH2 + 6 : margin;
                             doc.setFont("helvetica", "bold");
                             doc.setFontSize(14);
                             doc.text(`Answer #${i + 1}`, margin, y);
