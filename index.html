@@ -1006,6 +1006,25 @@
                     </div>
                 </div>
 
+                <!-- 题后留空 -->
+                <div style="margin-top:16px;">
+                    <label style="font-weight:600;font-size:14px;margin-bottom:8px;display:block;">题后留空</label>
+                    <div style="display:flex;gap:10px;">
+                        <div class="export-spacing-option selected" onclick="selectExportSpacing(this, 'none')" style="flex:1;text-align:center;padding:10px 6px;border:2px solid #3B82F6;border-radius:10px;cursor:pointer;background:#3B82F610;">
+                            <div style="font-size:18px;margin-bottom:2px;">📏</div>
+                            <div style="font-size:13px;font-weight:600;">无空</div>
+                        </div>
+                        <div class="export-spacing-option" onclick="selectExportSpacing(this, 'small')" style="flex:1;text-align:center;padding:10px 6px;border:2px solid #e5e7eb;border-radius:10px;cursor:pointer;">
+                            <div style="font-size:18px;margin-bottom:2px;">📐</div>
+                            <div style="font-size:13px;font-weight:600;">少量</div>
+                        </div>
+                        <div class="export-spacing-option" onclick="selectExportSpacing(this, 'large')" style="flex:1;text-align:center;padding:10px 6px;border:2px solid #e5e7eb;border-radius:10px;cursor:pointer;">
+                            <div style="font-size:18px;margin-bottom:2px;">📄</div>
+                            <div style="font-size:13px;font-weight:600;">大量</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="btn-row">
                     <button class="secondary" onclick="closeExportModal()">取消</button>
                     <button onclick="exportPDF()" style="background:#10B981;color:white;border:none;">确认导出</button>
@@ -1031,6 +1050,7 @@
             let activeFilterTags = []; // 筛选标签
             let exportMode = 'merged'; // 'merged' 或 'separate'
             let exportLayout = 'single'; // 'single' 或 'double'
+            let exportSpacing = 'none'; // 'none', 'small', 'large'
             let selectedQuestions = new Set(); // 勾选的题目ID
             let questionBasket = new Set(); // 试题篮中的题目ID
 
@@ -1441,6 +1461,18 @@
                 el.style.background = '#3B82F610';
             }
 
+            function selectExportSpacing(el, spacing) {
+                exportSpacing = spacing;
+                document.querySelectorAll(".export-spacing-option").forEach(e => {
+                    e.classList.remove("selected");
+                    e.style.borderColor = '#e5e7eb';
+                    e.style.background = '#fff';
+                });
+                el.classList.add("selected");
+                el.style.borderColor = '#3B82F6';
+                el.style.background = '#3B82F610';
+            }
+
             // 加载图片为 dataURL（跨域兼容）
             function loadImageAsDataURL(url) {
                 return new Promise((resolve, reject) => {
@@ -1609,6 +1641,18 @@
                 const colW = isDouble ? (pageW - margin * 3) / 2 : pageW - margin * 2;
                 const colOffset = isDouble ? colW + margin : 0;
 
+                // 题后留空
+                const spacingMm = exportSpacing === 'large' ? 50 : exportSpacing === 'small' ? 20 : 0;
+                function addSpacing(doc, y, pageW, margin) {
+                    if (spacingMm <= 0) return y;
+                    y += 4;
+                    doc.setDrawColor(200);
+                    doc.setLineDash([3, 3]);
+                    doc.line(margin, y, pageW - margin, y);
+                    doc.setLineDash([]);
+                    return y + spacingMm;
+                }
+
                 if (exportMode === 'merged') {
                     // 题目+答案在一起
                     if (isDouble) {
@@ -1652,6 +1696,7 @@
                                     await addImageDouble(doc, imgCache[toExport[i+1].answer_image_url], yR, colW, pageH, margin, `Q${i+2}答案`, xR);
                                 }
                             }
+                            addSpacing(doc, Math.max(yL, yR || 0), pageW, margin);
                         }
                     } else {
                         // 单栏模式（原逻辑）
@@ -1674,6 +1719,7 @@
                                 y += 5;
                                 await addImage(doc, imgCache[toExport[i].answer_image_url], y, `Q${i+1}答案`);
                             }
+                            addSpacing(doc, y, pageW, margin);
                         }
                     }
                 } else {
@@ -1688,19 +1734,21 @@
                             doc.text(`#${i + 1}`, margin, yL);
                             yL += 6;
                             if (imgCache[toExport[i].question_image_url]) {
-                                await addImageDouble(doc, imgCache[toExport[i].question_image_url], yL, colW, pageH, margin, `Q${i+1}题目`, margin);
+                                yL = await addImageDouble(doc, imgCache[toExport[i].question_image_url], yL, colW, pageH, margin, `Q${i+1}题目`, margin);
                             }
+                            let yR = 0;
                             if (i + 1 < toExport.length) {
-                                let yR = margin;
+                                yR = margin;
                                 const xR = margin + colW + margin;
                                 doc.setFont("helvetica", "bold");
                                 doc.setFontSize(12);
                                 doc.text(`#${i + 2}`, xR, yR);
                                 yR += 6;
                                 if (imgCache[toExport[i+1].question_image_url]) {
-                                    await addImageDouble(doc, imgCache[toExport[i+1].question_image_url], yR, colW, pageH, margin, `Q${i+2}题目`, xR);
+                                    yR = await addImageDouble(doc, imgCache[toExport[i+1].question_image_url], yR, colW, pageH, margin, `Q${i+2}题目`, xR);
                                 }
                             }
+                            addSpacing(doc, Math.max(yL, yR), pageW, margin);
                         }
                         // 分隔页
                         doc.addPage();
@@ -1748,8 +1796,9 @@
                             doc.text(`Question #${i + 1}`, margin, y);
                             y += 8;
                             if (imgCache[toExport[i].question_image_url]) {
-                                await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
+                                y = await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`);
                             }
+                            addSpacing(doc, y, pageW, margin);
                         }
                         // 分隔页
                         doc.addPage();
