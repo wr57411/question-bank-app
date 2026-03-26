@@ -1617,10 +1617,9 @@
                 }
 
                 // 双栏模式的图片添加函数
-                function addImageDouble(doc, dataUrl, yStart, colW, pageH, margin, label, xStart) {
+                function addImageDouble(doc, dataUrl, yStart, colW, maxH, margin, label, xStart) {
                     return new Promise((resolve) => {
                         if (!dataUrl || dataUrl.length < 50) {
-                            console.warn("addImageDouble: dataURL无效", label);
                             resolve(yStart + 10);
                             return;
                         }
@@ -1629,20 +1628,20 @@
                         const finish = (fn) => { if (!done) { done = true; fn(); } };
                         img.onload = function() {
                             finish(() => {
-                                const maxImgH = pageH - margin * 2 - yStart;
-                                const ratio = Math.min(colW / img.width, maxImgH / img.height, 1);
+                                const imgMaxH = maxH - yStart;
+                                const ratio = Math.min(colW / img.width, imgMaxH / img.height, 1);
                                 const w = img.width * ratio;
                                 const h = img.height * ratio;
-                                if (yStart + h > pageH - margin) { resolve(yStart + 10); return; }
+                                if (yStart + h > maxH) { resolve(yStart + 10); return; }
                                 doc.addImage(dataUrl, "JPEG", xStart, yStart, w, h);
                                 resolve(yStart + h + 3);
                             });
                         };
                         img.onerror = function() {
-                            finish(() => { console.warn("addImageDouble error:", label); resolve(yStart + 10); });
+                            finish(() => { resolve(yStart + 10); });
                         };
                         setTimeout(() => {
-                            finish(() => { console.warn("addImageDouble timeout:", label); resolve(yStart + 10); });
+                            finish(() => { resolve(yStart + 10); });
                         }, 5000);
                         img.src = dataUrl;
                     });
@@ -1720,30 +1719,55 @@
                             const qH = calcImgHeight(qImg, colW);
                             const aH = aImg ? calcImgHeight(aImg, colW) : 0;
                             const totalH = 8 + qH + (aImg ? 6 + 5 + aH : 0) + spacingMm + 6;
+                            const maxH = pageH - margin;
 
-                            // 当前列放不下整个题 → 换栏
-                            if (y + totalH > maxH) {
-                                if (col === 0) { col = 1; y = margin; }
-                                else { doc.addPage(); col = 0; y = margin; }
+                            // 判断是否需要全页显示（图片太高不适合单栏）
+                            const useFullPage = totalH > maxH * 0.75;
+
+                            if (useFullPage) {
+                                // 图片太高 → 全页显示，不缩小
+                                doc.addPage();
+                                let fy = margin;
+                                doc.setFont("helvetica", "bold");
+                                doc.setFontSize(14);
+                                doc.text(`#${i + 1}`, margin, fy);
+                                fy += 8;
+                                const availH = maxH - 18;
+                                if (qImg) fy = await addImage(doc, qImg, fy, `Q${i+1}全页`, availH * (aImg ? 0.6 : 1));
+                                if (aImg) {
+                                    fy += 3;
+                                    doc.setFont("helvetica", "normal");
+                                    doc.setFontSize(11);
+                                    doc.text("Answer:", margin, fy);
+                                    fy += 5;
+                                    await addImage(doc, aImg, fy, `A${i+1}全页`, availH * 0.4);
+                                }
+                                addSpacing(doc, fy, pageW, margin);
+                                col = 0; y = margin; // 下一题从新页面的左栏开始
+                            } else {
+                                // 正常双栏排版
+                                if (y + totalH > maxH) {
+                                    if (col === 0) { col = 1; y = margin; }
+                                    else { doc.addPage(); col = 0; y = margin; }
+                                }
+                                const x = getColX(col);
+                                doc.setFont("helvetica", "bold");
+                                doc.setFontSize(12);
+                                doc.text(`#${i + 1}`, x, y);
+                                y += 7;
+
+                                if (qImg) y = await addImageDouble(doc, qImg, y, colW, maxH, margin, `Q${i+1}`, x);
+
+                                if (aImg) {
+                                    y += 2;
+                                    doc.setFont("helvetica", "normal");
+                                    doc.setFontSize(9);
+                                    doc.text("Answer:", x, y);
+                                    y += 5;
+                                    y = await addImageDouble(doc, aImg, y, colW, maxH, margin, `A${i+1}`, x);
+                                }
+                                y = addSpacing(doc, y, x + colW, x) + 2;
                             }
-
-                            const x = getColX(col);
-                            doc.setFont("helvetica", "bold");
-                            doc.setFontSize(12);
-                            doc.text(`#${i + 1}`, x, y);
-                            y += 7;
-
-                            if (qImg) y = await addImageDouble(doc, qImg, y, colW, pageH, margin, `Q${i+1}`, x);
-
-                            if (aImg) {
-                                y += 2;
-                                doc.setFont("helvetica", "normal");
-                                doc.setFontSize(9);
-                                doc.text("Answer:", x, y);
-                                y += 5;
-                                y = await addImageDouble(doc, aImg, y, colW, pageH, margin, `A${i+1}`, x);
-                            }
-                            y = addSpacing(doc, y, x + colW, x) + 2;
                         }
                     } else {
                         // 单栏模式（每题一页，合理分配空间）
@@ -1795,7 +1819,7 @@
                             doc.setFontSize(12);
                             doc.text(`#${i + 1}`, x, y);
                             y += 6;
-                            if (qImg) y = await addImageDouble(doc, qImg, y, colW, pageH, margin, `Q${i+1}`, x);
+                            if (qImg) y = await addImageDouble(doc, qImg, y, colW, maxH2, margin, `Q${i+1}`, x);
                             y = addSpacing(doc, y, x + colW, x) + 2;
                         }
                         // 新页面开始答案部分（保证清晰分隔）
@@ -1824,7 +1848,7 @@
                             doc.text(`#${i + 1}`, x, aY);
                             aY += 6;
                             if (aImg) {
-                                aY = await addImageDouble(doc, aImg, aY, colW, pageH, margin, `A${i+1}`, x);
+                                aY = await addImageDouble(doc, aImg, aY, colW, maxH3, margin, `A${i+1}`, x);
                             } else {
                                 doc.setFont("helvetica", "normal");
                                 doc.setFontSize(10);
