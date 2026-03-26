@@ -1555,8 +1555,7 @@
                     return;
                 }
 
-                // 按排版适用性排序：仅单栏(0) 在前，单双栏均可(1) 在后
-                toExport.sort((a, b) => (a.layout_type || 0) - (b.layout_type || 0));
+                // 按排版适用性自动分组，不需要排序
 
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
