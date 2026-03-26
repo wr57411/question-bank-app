@@ -1721,8 +1721,10 @@
                             const totalH = 8 + qH + (aImg ? 6 + 5 + aH : 0) + spacingMm + 6;
                             const maxH = pageH - margin;
 
-                            // 判断是否需要全页显示（图片太高不适合单栏）
-                            const useFullPage = totalH > maxH * 0.75;
+                            // 判断是否需要全页显示：题目图超高，不适合双栏缩小
+                            const qImgTooTall = qH > pageH * 0.5; // 题目图超过页面一半高度
+                            const totalTooTall = totalH > maxH * 0.7; // 总内容超过70%页面
+                            const useFullPage = qImgTooTall || totalTooTall;
 
                             if (useFullPage) {
                                 // 图片太高 → 全页显示，不缩小
