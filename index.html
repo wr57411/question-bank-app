@@ -1705,7 +1705,7 @@
                 if (doubleQs.length > 0) {
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(13);
-                    doc.text("— 单双栏均可 —", pageW / 2, M + 2, { align: "center" });
+                    doc.text("Double Column", pageW / 2, M + 2, { align: "center" });
                     let y = M + 12;
                     let col = 0;
 
@@ -1759,7 +1759,7 @@
                     if (hasContent) {
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(13);
-                        doc.text("— 仅单栏 —", pageW / 2, M + 2, { align: "center" });
+                        doc.text("Single Column", pageW / 2, M + 2, { align: "center" });
                     }
 
                     for (let i = 0; i < singleQs.length; i++) {
