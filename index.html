@@ -1777,9 +1777,9 @@
                         }
                     }
                 } else {
-                    // 题目和答案分开：先全部题目，再全部答案
+                    // ===== 题目和答案分开 =====
                     if (isDouble) {
-                        // 双栏 - 题目部分（流式：从左到右、从上到下）
+                        // 双栏 - 题目部分
                         let col = 0, y = margin;
                         const maxH2 = pageH - margin;
                         for (let i = 0; i < toExport.length; i++) {
@@ -1798,15 +1798,17 @@
                             if (qImg) y = await addImageDouble(doc, qImg, y, colW, pageH, margin, `Q${i+1}`, x);
                             y = addSpacing(doc, y, x + colW, x) + 2;
                         }
-                        // 分隔区域（4cm高）
-                        const separatorH = 40; // mm
+                        // 新页面开始答案部分（保证清晰分隔）
+                        doc.addPage();
+
+                        // 答案部分 - 先放 Answer Key 分隔区
                         doc.setFillColor(245, 245, 245);
-                        doc.rect(margin, margin, pageW - margin * 2, separatorH, 'F');
+                        doc.rect(margin, margin, pageW - margin * 2, 40, 'F');
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(16);
-                        doc.text("Answer Key", pageW / 2, margin + separatorH / 2 + 2, { align: "center" });
-                        // 双栏 - 答案部分（流式：从左到右、从上到下）
-                        let aCol = 0, aY = margin + separatorH + 6;
+                        doc.text("Answer Key", pageW / 2, margin + 22, { align: "center" });
+
+                        let aCol = 0, aY = margin + 46;
                         const maxH3 = pageH - margin;
                         for (let i = 0; i < toExport.length; i++) {
                             const aImg = imgCache[toExport[i].answer_image_url];
@@ -1841,17 +1843,22 @@
                             doc.text(`Question #${i + 1}`, margin, y);
                             y += 8;
                             if (imgCache[toExport[i].question_image_url]) {
-                                await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`, pageH - margin * 2 - 20);
+                                y = await addImage(doc, imgCache[toExport[i].question_image_url], y, `Q${i+1}题目`, pageH - margin * 2 - 20);
                             }
+                            addSpacing(doc, y, pageW, margin);
                         }
-                        // 分隔区域（4cm高）
+                        // 新页面开始答案部分
+                        doc.addPage();
+
+                        // Answer Key 分隔区
                         const separatorH2 = 40;
                         doc.setFillColor(245, 245, 245);
                         doc.rect(margin, margin, pageW - margin * 2, separatorH2, 'F');
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(16);
                         doc.text("Answer Key", pageW / 2, margin + separatorH2 / 2 + 2, { align: "center" });
-                        // 单栏 - 答案部分（直接在 Answer Key 区域下方开始）
+
+                        // 答案部分
                         for (let i = 0; i < toExport.length; i++) {
                             if (i > 0) doc.addPage();
                             let y = (i === 0) ? margin + separatorH2 + 6 : margin;
