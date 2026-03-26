@@ -1694,44 +1694,32 @@
 
                 let currentNum = 0; // 全局题号
 
-                // ===== 分开模式的答案存储 =====
-                const doubleAnswers = [];
-                const singleAnswers = [];
-
-                // ===== 执行导出 =====
-                let hasContent = false;
-
-                // 先导出双栏批（单双栏均可）
-                if (doubleQs.length > 0) {
-                    doc.setFont("helvetica", "bold");
-                    doc.setFontSize(13);
-                    doc.text("Double Column", pageW / 2, M + 2, { align: "center" });
-                    let y = M + 12;
-                    let col = 0;
-
-                    for (let i = 0; i < doubleQs.length; i++) {
-                        const q = doubleQs[i];
+                // ===== 双栏题目渲染 =====
+                async function renderDoubleQuestions(items, startLabel) {
+                    let col = 0, y = M + 12;
+                    if (startLabel) {
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(13);
+                        doc.text(startLabel, pageW / 2, M + 2, { align: "center" });
+                    }
+                    for (let i = 0; i < items.length; i++) {
+                        const q = items[i];
                         const qImg = imgCache[q.question_image_url];
-                        const aImg = imgCache[q.answer_image_url];
                         const qH = calcImgHeight(qImg, dblColW);
-                        const aH = aImg ? calcImgHeight(aImg, dblColW) : 0;
-                        const totalH = 7 + qH + (exportMode === 'merged' && aImg ? 5 + 5 + aH : 0) + spacingMm + 4;
-
+                        const aImg = imgCache[q.answer_image_url];
+                        const totalH = 7 + qH + spacingMm + 4;
                         if (y + totalH > H) {
                             if (col === 0) { col = 1; y = M; }
                             else { doc.addPage(); col = 0; y = M; }
                         }
-
                         currentNum++;
                         const x = M + col * (dblColW + M);
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(12);
                         doc.text(`#${currentNum}`, x, y);
                         y += 7;
-
                         if (qImg) y = await addImageDouble(doc, qImg, y, dblColW, H, M, `DQ${currentNum}`, x);
-
-                        if (aImg && exportMode === 'merged') {
+                        if (exportMode === 'merged' && aImg) {
                             y += 2;
                             doc.setFont("helvetica", "normal");
                             doc.setFontSize(9);
@@ -1739,49 +1727,61 @@
                             y += 5;
                             y = await addImageDouble(doc, aImg, y, dblColW, H, M, `DA${currentNum}`, x);
                         }
-
                         if (exportMode === 'separate' && aImg) {
                             doubleAnswers.push({ num: currentNum, aImg: aImg });
                         }
-
                         y = addSpacing(doc, y, spacingMm) + 2;
                     }
-                    hasContent = true;
                 }
 
-                // 如果两个批次都有，加分隔线
-                if (doubleQs.length > 0 && singleQs.length > 0) {
+                // ===== 双栏答案渲染 =====
+                async function renderDoubleAnswers(answers) {
+                    if (answers.length === 0) return;
                     doc.addPage();
+                    doc.setFillColor(245, 245, 245);
+                    doc.rect(M, M, W, 30, 'F');
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(14);
+                    doc.text("Answer Key", pageW / 2, M + 18, { align: "center" });
+
+                    let aY = M + 36, aCol = 0;
+                    for (const ans of answers) {
+                        const aH = calcImgHeight(ans.aImg, dblColW);
+                        if (aY + 6 + aH > H) {
+                            if (aCol === 0) { aCol = 1; aY = M; }
+                            else { doc.addPage(); aCol = 0; aY = M; }
+                        }
+                        const x = M + aCol * (dblColW + M);
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(12);
+                        doc.text(`#${ans.num}`, x, aY);
+                        aY += 6;
+                        aY = await addImageDouble(doc, ans.aImg, aY, dblColW, H, M, `DAN${ans.num}`, x);
+                        aY += 4;
+                    }
                 }
 
-                // 再导出单栏批（仅单栏）
-                if (singleQs.length > 0) {
-                    if (hasContent) {
+                // ===== 单栏题目渲染 =====
+                async function renderSingleQuestions(items, startLabel) {
+                    if (startLabel) {
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(13);
-                        doc.text("Single Column", pageW / 2, M + 2, { align: "center" });
+                        doc.text(startLabel, pageW / 2, M + 2, { align: "center" });
                     }
-
-                    for (let i = 0; i < singleQs.length; i++) {
-                        if (i > 0 || (hasContent && i === 0)) {
-                            // 如果是单栏批的第一题且已有双栏内容，已在上方加了新页
-                            if (!(hasContent && i === 0)) doc.addPage();
-                        }
-                        let y = (hasContent && i === 0) ? M + 12 : M;
+                    for (let i = 0; i < items.length; i++) {
+                        if (i > 0) doc.addPage();
+                        let y = (startLabel && i === 0) ? M + 12 : M;
                         currentNum++;
-                        const q = singleQs[i];
+                        const q = items[i];
                         const qImg = imgCache[q.question_image_url];
                         const aImg = imgCache[q.answer_image_url];
                         const hasAnswer = !!aImg && exportMode === 'merged';
-
                         doc.setFont("helvetica", "bold");
                         doc.setFontSize(14);
                         doc.text(`#${currentNum}`, M, y);
                         y += 8;
-
                         const availH = H - 18;
                         if (qImg) y = await addImage(doc, qImg, y, `SQ${currentNum}`, hasAnswer ? availH * 0.6 : availH);
-
                         if (hasAnswer) {
                             y += 3;
                             doc.setFont("helvetica", "normal");
@@ -1790,58 +1790,55 @@
                             y += 5;
                             await addImage(doc, aImg, y, `SA${currentNum}`, availH * 0.4);
                         }
-
                         if (exportMode === 'separate' && aImg) {
                             singleAnswers.push({ num: currentNum, aImg: aImg });
                         }
-
                         addSpacing(doc, y, spacingMm);
                     }
                 }
 
-                // ===== 分开模式：答案部分 =====
-                if (exportMode === 'separate') {
+                // ===== 单栏答案渲染 =====
+                async function renderSingleAnswers(answers) {
+                    if (answers.length === 0) return;
                     doc.addPage();
-                    // Answer Key 分隔区
                     doc.setFillColor(245, 245, 245);
-                    doc.rect(M, M, W, 40, 'F');
+                    doc.rect(M, M, W, 30, 'F');
                     doc.setFont("helvetica", "bold");
-                    doc.setFontSize(16);
-                    doc.text("Answer Key", pageW / 2, M + 22, { align: "center" });
+                    doc.setFontSize(14);
+                    doc.text("Answer Key", pageW / 2, M + 18, { align: "center" });
 
-                    let aY = M + 48;
-
-                    // 先排双栏答案（如果有的话）
-                    if (doubleAnswers.length > 0) {
-                        let aCol = 0;
-                        for (const ans of doubleAnswers) {
-                            const aH = calcImgHeight(ans.aImg, dblColW);
-                            if (aY + 6 + aH > H) {
-                                if (aCol === 0) { aCol = 1; aY = M; }
-                                else { doc.addPage(); aCol = 0; aY = M; }
-                            }
-                            const x = M + aCol * (dblColW + M);
-                            doc.setFont("helvetica", "bold");
-                            doc.setFontSize(12);
-                            doc.text(`#${ans.num}`, x, aY);
-                            aY += 6;
-                            aY = await addImageDouble(doc, ans.aImg, aY, dblColW, H, M, `DAN${ans.num}`, x);
-                            aY += 4;
-                        }
+                    for (let i = 0; i < answers.length; i++) {
+                        if (i > 0) doc.addPage();
+                        let y = (i === 0) ? M + 36 : M;
+                        const ans = answers[i];
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(14);
+                        doc.text(`#${ans.num}`, M, y);
+                        y += 8;
+                        await addImage(doc, ans.aImg, y, `SAN${ans.num}`, H - 10);
                     }
+                }
 
-                    // 再排单栏答案
-                    if (singleAnswers.length > 0) {
-                        for (let i = 0; i < singleAnswers.length; i++) {
-                            if (i > 0 || doubleAnswers.length > 0) doc.addPage();
-                            let y = M;
-                            const ans = singleAnswers[i];
-                            doc.setFont("helvetica", "bold");
-                            doc.setFontSize(14);
-                            doc.text(`#${ans.num}`, M, y);
-                            y += 8;
-                            await addImage(doc, ans.aImg, y, `SAN${ans.num}`, H - 10);
-                        }
+                // ===== 执行导出 =====
+                const doubleAnswers = [];
+                const singleAnswers = [];
+                let hasDouble = doubleQs.length > 0;
+                let hasSingle = singleQs.length > 0;
+
+                // 双栏题目 + 紧跟答案
+                if (hasDouble) {
+                    await renderDoubleQuestions(doubleQs, null);
+                    if (exportMode === 'separate') {
+                        await renderDoubleAnswers(doubleAnswers);
+                    }
+                }
+
+                // 单栏题目 + 紧跟答案
+                if (hasSingle) {
+                    if (hasDouble) doc.addPage(); // 两个批次之间分页
+                    await renderSingleQuestions(singleQs, null);
+                    if (exportMode === 'separate') {
+                        await renderSingleAnswers(singleAnswers);
                     }
                 }
 
